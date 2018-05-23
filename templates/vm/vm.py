@@ -8,6 +8,7 @@ ZT_TEMPLATE_UID = 'github.com/zero-os/0-templates/zerotier_client/0.0.1'
 BASEFLIST = 'https://hub.gig.tech/gig-bootable/{}.flist'
 IPXEURL = 'https://bootstrap.gig.tech/ipxe/{}/0/development'
 
+
 class Vm(TemplateBase):
 
     version = '0.0.1'
@@ -24,6 +25,10 @@ class Vm(TemplateBase):
 
         if self.data['image'].partition(':')[0] not in ['zero-os', 'ubuntu']:
             raise ValueError('Invalid image')
+
+        for key in ['id', 'ztClient']:
+            if not self.data['zerotier'].get(key):
+                raise ValueError('Invalid input, zerotier requires {}'.format(key))
 
     @property
     def _node_api(self):
@@ -62,10 +67,10 @@ class Vm(TemplateBase):
                 'mountPoint': disk['mountPoint'],
                 'filesystem': disk['filesystem'],
             })
+
         vm_data = {
             'memory': self.data['memory'],
             'cpu': self.data['cpu'],
-            'ports': self.data['ports'],
             'disks': vm_disks,
             'configs': self.data['configs'],
             'ztIdentity': self.data['ztIdentity'],

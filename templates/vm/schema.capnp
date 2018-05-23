@@ -1,4 +1,5 @@
-@0x89a3426611f2d4e6; 
+@0x82a66cb45b1e9ace; 
+
 
 
 struct Schema {
@@ -6,18 +7,12 @@ struct Schema {
     cpu @1: UInt16 = 1; # Number of virtual CPUs
     zerotier @2: Zerotier; # zerotier nic to attach to the vm
     image @3: Text;
-    ports @4:List(Port); # List of portforwards from node to vm
-    disks @5: List(Disk); # list of disks to attach to the vm
-    configs @6: List(Config); # list of config
-    ztIdentity @7: Text; # VM zerotier ID
-    nodeRobot @8: Text;
-    nodeVm @9: Text;
+    disks @4: List(Disk); # list of disks to attach to the vm
+    configs @5: List(Config); # list of config
+    ztIdentity @6: Text; # VM zerotier ID
+    nodeRobot @7: Text;
+    nodeVm @8: Text;
 
-   struct Port {
-        source @0: Int32;
-        target @1: Int32;
-        name @2: Text;
-   }
    struct Config {
         path @0: Text;
         content @1: Text;
@@ -37,7 +32,6 @@ struct Schema {
       mountPoint @2: Text;
       filesystem @3: FsType;
       name @4: Text;
-      vdisk @5: Text;
    }
 
     enum DiskType{
@@ -45,17 +39,8 @@ struct Schema {
         ssd @1;
     }
 
-
    struct Zerotier {
       id @0: Text;
       ztClient @1: Text;
-   }
-
-   enum NicType {
-      default @0;
-      vlan @1;
-      vxlan @2;
-      bridge @3;
-      zerotier @4;
    }
 }
