@@ -11,7 +11,6 @@ struct Schema {
     configs @5: List(Config); # list of config
     ztIdentity @6: Text; # VM zerotier ID
     nodeRobot @7: Text;
-    nodeVm @8: Text;
 
    struct Config {
         path @0: Text;

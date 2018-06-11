@@ -6,7 +6,8 @@ VDISK_TEMPLATE_UID = 'github.com/zero-os/0-templates/vdisk/0.0.1'
 VM_TEMPLATE_UID = 'github.com/zero-os/0-templates/vm/0.0.1'
 ZT_TEMPLATE_UID = 'github.com/zero-os/0-templates/zerotier_client/0.0.1'
 BASEFLIST = 'https://hub.gig.tech/gig-bootable/{}.flist'
-IPXEURL = 'https://bootstrap.gig.tech/ipxe/{}/0/development'
+ZEROOSFLIST = "https://hub.gig.tech/gig-bootable/zero-os-bootable.flist"
+IPXEURL = 'https://bootstrap.gig.tech/ipxe/{}/{}/development'
 
 
 class Vm(TemplateBase):
@@ -85,7 +86,8 @@ class Vm(TemplateBase):
         image, _, version = self.data['image'].partition(':')
         if image == 'zero-os':
             version = version or 'master'
-            vm_data['ipxeUrl'] = IPXEURL.format(version)
+            vm_data['ipxeUrl'] = IPXEURL.format(version, self.data['zerotier']['id'])
+            vm_data['flist'] = ZEROOSFLIST
         else:
             version = version or 'lts'
             flist = '{}:{}'.format(image, version)
@@ -93,8 +95,13 @@ class Vm(TemplateBase):
 
         vm = self._node_api.services.create(VM_TEMPLATE_UID, self.guid, data=vm_data)
         vm.schedule_action('install').wait(die=True)
+        self.data['ztIdentity'] = vm.schedule_action('zt_identity').wait(die=True).result
+
         self.state.set('actions', 'install', 'ok')
         self.state.set('status', 'running', 'ok')
+
+    def zt_identity(self):
+        return self.data['ztIdentity']
 
     def uninstall(self):
         self.logger.info('Uninstalling vm %s' % self.name)
