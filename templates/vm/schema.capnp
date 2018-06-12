@@ -10,7 +10,7 @@ struct Schema {
     disks @4: List(Disk); # list of disks to attach to the vm
     configs @5: List(Config); # list of config
     ztIdentity @6: Text; # VM zerotier ID
-    nodeRobot @7: Text;
+    nodeId @7: Text;
 
    struct Config {
         path @0: Text;
