@@ -9,6 +9,7 @@ struct Schema {
     parityShards @5: Int32;
     storageType @6: StorageType;
     storageSize @7: UInt16;
+    namespaces @8: List(Text);
 
     enum StorageType {
      hdd @0;

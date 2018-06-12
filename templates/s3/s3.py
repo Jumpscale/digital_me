@@ -14,6 +14,7 @@ class S3(TemplateBase):
 
     def __init__(self, name=None, guid=None, data=None):
         super().__init__(name=name, guid=guid, data=data)
+        self._nodes = []
 
     def _get_zrobot(self, name, url):
         j.clients.zrobot.get(name, data={'url': url})
@@ -23,14 +24,19 @@ class S3(TemplateBase):
         if self.data['parityShards'] > self.data['dataShards']:
             raise ValueError('parityShards must be equal to or less than dataShards')
 
-    def _create_namespace(self, nodes, index, storage_key, password):
+        capacity = j.clients.grid_capacity.get(interactive=False)
+        self._nodes = json.loads(capacity.api.ListCapacity(query_params={'farmer': self.data['farmerIyoOrg']})[1].content.decode('utf-8'))
+        if not self._nodes:
+            raise ValueError('There are no nodes in this farm')
+
+    def _create_namespace(self, index, storage_key, password):
         final_index = index
         while True:
-            next_index = final_index + 1 if final_index < len(nodes) - 2 else 0
-            if nodes[final_index][storage_key] >= self.data['storageSize']:
-                best_node = nodes[final_index]
-                robot = self._get_zrobot(best_node['_id'], best_node['robot_address'])
-                robot = self._get_zrobot('main', 'http://localhost:6601')
+            next_index = final_index + 1 if final_index < len(self._nodes) - 2 else 0
+            if self._nodes[final_index][storage_key] >= self.data['storageSize']:
+                best_node = self._nodes[final_index]
+                robot = self._get_zrobot(best_node['node_id'], best_node['robot_address'])
+                #robot = self._get_zrobot('main', 'http://localhost:6600')
                 data = {
                     'disktype': self.data['storageType'],
                     'mode': 'user',
@@ -45,6 +51,7 @@ class S3(TemplateBase):
                 available = namespace.schedule_action('install', args={'if_available': True}).wait(die=True).result
                 if available:
                     best_node[storage_key] = best_node[storage_key] - self.data['storageSize']
+                    self.data['namespaces'].append(namespace.name)
                     return namespace, next_index
                 namespace.delete()
             if next_index == index:
@@ -60,24 +67,18 @@ class S3(TemplateBase):
             min = self.data['dataShards'] - self.data['parityShards']
             zdb_count = math.ceil(max + ((max - min)/2))
 
-        capacity = j.clients.grid_capacity.get(interactive=False)
-
         storage_key = 'sru' if self.data['storageType'] == 'ssd' else 'hru'
-        nodes = json.loads(capacity.nodes.ListCapacity(
-            query_params={'farmer': self.data['farmerIyoOrg']}).content.decode('utf8'))
-        if not nodes:
-            raise RuntimeError('There are not nodes in this farm')
         ns_password = j.data.idgenerator.generateXCharID(32)
         zdbs_connection = list()
-        nodes = sorted(nodes, key=lambda k: k[storage_key], reverse=True)
+        self._nodes = sorted(self._nodes, key=lambda k: k[storage_key], reverse=True)
 
         node_index = 0
         for i in range(zdb_count):
-            namespace, node_index = self._create_namespace(nodes, node_index, storage_key, ns_password)
+            namespace, node_index = self._create_namespace(node_index, storage_key, ns_password)
             result = namespace.schedule_action('connection_info').wait(die=True).result
             zdbs_connection.append('{}:{}'.format(result['ip'], result['port']))
 
-        nodes = sorted(nodes, key=lambda k: k[storage_key], reverse=True)
+        self._nodes = sorted(self._nodes, key=lambda k: k[storage_key], reverse=True)
 
         vm_data = {
             'image': 'zero-os',
@@ -92,8 +93,7 @@ class S3(TemplateBase):
                 'filesystem': 'btrfs',
                 'name': 's3vm'
             }],
-            # 'nodeRobot': nodes[0]['_id'],
-            'nodeRobot': 'main',
+            'nodeId': self._nodes[0]['node_id'],
         }
         vm = self.api.services.create(VM_TEMPLATE_UID, self.guid, vm_data)
         vm.schedule_action('install').wait(die=True)
@@ -108,7 +108,7 @@ class S3(TemplateBase):
         else:
             raise RuntimeError('Failed to find vm in zerotier network')
 
-        vm_robot = self._get_zrobot(vm.name, 'http://{}:6601'.format(member['physicalAddress']))
+        vm_robot = self._get_zrobot(vm.name, 'http://{}:6600'.format(member['physicalAddress']))
         minio_data = {
             'zerodbs': zdbs_connection,
             'namespace': self.guid,

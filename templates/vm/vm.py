@@ -7,7 +7,7 @@ VM_TEMPLATE_UID = 'github.com/zero-os/0-templates/vm/0.0.1'
 ZT_TEMPLATE_UID = 'github.com/zero-os/0-templates/zerotier_client/0.0.1'
 BASEFLIST = 'https://hub.gig.tech/gig-bootable/{}.flist'
 ZEROOSFLIST = "https://hub.gig.tech/gig-bootable/zero-os-bootable.flist"
-IPXEURL = 'https://bootstrap.gig.tech/ipxe/{}/{}/development'
+IPXEURL = 'https://bootstrap.gig.tech/ipxe/{}/{}/development&ztid={}'
 
 
 class Vm(TemplateBase):
@@ -19,10 +19,20 @@ class Vm(TemplateBase):
         super().__init__(name=name, guid=guid, data=data)
 
         self.recurring_action('_monitor', 30)  # every 30 seconds
+        self._node_api = None
 
     def validate(self):
-        if not self.data['nodeRobot']:
-            raise ValueError('Invalid input, Vm requires nodeRobot')
+        if not self.data['nodeId']:
+            raise ValueError('Invalid input, Vm requires nodeId')
+
+        capacity = j.clients.grid_capacity.get(interactive=False)
+        nodes = capacity.api.ListCapacity(query_params={'node_id': self.data['nodeId']})[0]
+        if not nodes:
+            raise ValueError('Node {} does not exist'.format(self.data['nodeId']))
+
+        j.clients.zrobot.get(self.data['nodeId'], data={'url': nodes[0].robot_address})
+        self._node_api = j.clients.zrobot.robots[self.data['nodeId']]
+        # self._node_api = j.clients.zrobot.robots['main']
 
         if self.data['image'].partition(':')[0] not in ['zero-os', 'ubuntu']:
             raise ValueError('Invalid image')
@@ -32,15 +42,12 @@ class Vm(TemplateBase):
                 raise ValueError('Invalid input, zerotier requires {}'.format(key))
 
     @property
-    def _node_api(self):
-        return j.clients.zrobot.robots[self.data['nodeRobot']]
-
-    @property
     def _node_vm(self):
         return self._node_api.services.get(name=self.guid)
 
     def _monitor(self):
         self.logger.info('Monitor vm %s' % self.name)
+        self.state.check('actions', 'install', 'ok')
         state = self._node_vm.state
         try:
             state.check('status', 'running', 'ok')
@@ -80,13 +87,15 @@ class Vm(TemplateBase):
                 'type': 'zerotier',
                 'ztClient': self.data['zerotier']['ztClient'],
                 'name': 'zerotier_nic',
+            },
+            {'name': 'test',
+             'type': 'default'
             }]
         }
 
         image, _, version = self.data['image'].partition(':')
         if image == 'zero-os':
             version = version or 'master'
-            vm_data['ipxeUrl'] = IPXEURL.format(version, self.data['zerotier']['id'])
             vm_data['flist'] = ZEROOSFLIST
         else:
             version = version or 'lts'
@@ -94,6 +103,13 @@ class Vm(TemplateBase):
             vm_data['flist'] = BASEFLIST.format(flist)
 
         vm = self._node_api.services.create(VM_TEMPLATE_UID, self.guid, data=vm_data)
+
+        if image == 'zero-s':
+            if not self.data['ztIdentity']:
+                self.data['ztIdentity'] = vm.schedule_action('generate_identity').wait(die=True).result
+            url = IPXEURL.format(version, self.data['zerotier']['id'], self.data['ztIdentity'])
+            vm.schedule_action('update_flist', args={'url': url}).wait(die=True)
+
         vm.schedule_action('install').wait(die=True)
         self.data['ztIdentity'] = vm.schedule_action('zt_identity').wait(die=True).result
 
