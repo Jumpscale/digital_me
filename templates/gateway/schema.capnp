@@ -1,17 +1,14 @@
-@0xd3397b9ab433d876;
-
+@0xbe3b7b68c86b357e;
 
 struct Schema {
     status @0 :Status;
     hostname @1 :Text;
     networks @2 :List(Network); # Configuration of the attached nics to the container
     portforwards @3 :List(PortForward);
-    publicPortforwards @4 :List(PortForward);
-    httpproxies @5 :List(HTTPProxy);
-    publicHttpproxies @6 :List(HTTPProxy);
-    domain @7: Text;
-    nodeRobot @8: Text;
-    publicGatewayRobot @9: Text;
+    httpproxies @4 :List(HTTPProxy);
+    domain @5: Text;
+    nodeRobot @6: Text;
+    publicGatewayRobot @7: Text;
 
     struct Network {
         type @0: NetworkType;
@@ -19,7 +16,7 @@ struct Schema {
         config @2: NetworkConfig;
         name @3: Text;
         dhcpserver @4: DHCP;
-        ztClient @6: Text;
+        ztClient @5: Text;
     }
 
     struct CloudInit {
@@ -54,9 +51,14 @@ struct Schema {
 
     struct HTTPProxy {
         host @0: Text;
-        destinations @1: List(Text);
+        destinations @1: List(HTTPDestination);
         types @2: List(HTTPType);
         name @3: Text;
+    }
+
+    struct HTTPDestination {
+        vm @0: Text;
+        port @1: Int32;
     }
 
     enum Status{
@@ -72,10 +74,9 @@ struct Schema {
     struct PortForward{
         protocols @0: List(IPProtocol);
         srcport @1: Int32;
-        srcnetwork @2: Text;
-        dstport @3: Int32;
-        dstip @4: Text;
-        name @5: Text;
+        dstport @2: Int32;
+        vm @3: Text;
+        name @4: Text;
     }
     enum NetworkType {
         default @0;

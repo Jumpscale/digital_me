@@ -1,14 +1,17 @@
 from zerorobot.template.base import TemplateBase
 from js9 import j
+from urllib.parse import urlparse
 import random
 import copy
 
-PUBLIC_ZT = "9f77fc393e094c66"
-PUBLIC_GW_ROBOTS = ["http://10.103.54.126:6600", "http://10.103.199.4:6600", "http://10.103.107.41:6600"]
+PUBLIC_GW_ROBOTS = ["http://gw1.robot.threefoldtoken.com:6600", "http://gw2.robot.threefoldtoken.com:6600", "http://gw3.robot.threefoldtoken.com:6600"]
 
 GW_UID = 'github.com/zero-os/0-templates/gateway/0.0.1'
 PGW_UID = 'github.com/zero-os/0-templates/public_gateway/0.0.1'
 DM_VM_UID = 'github.com/jumpscale/digital_me/vm/0.0.1'
+
+
+BASEPORT = 10000
 
 class Gateway(TemplateBase):
     version = '0.0.1'
@@ -16,7 +19,7 @@ class Gateway(TemplateBase):
 
     def __init__(self, name, guid=None, data=None):
         super().__init__(name=name, guid=guid, data=data)
-
+        self.add_delete_callback(self.uninstall)
 
     @property
     def robot_api(self):
@@ -26,35 +29,180 @@ class Gateway(TemplateBase):
     def public_robot_api(self):
         if not self.data.get('publicGatewayRobot'):
             self.data['publicGatewayRobot'] = random.choice(PUBLIC_GW_ROBOTS)
-        return j.clients.zrobot.robots[self.data['publicGatewayRobot']]
+        roboturl = self.data['publicGatewayRobot']
+        robotname = urlparse(roboturl).netloc
+        j.clients.zrobot.get(robotname, {'url': roboturl}, interactive=False)
+        return j.clients.zrobot.robots[robotname]
 
     def get_gw_service(self):
         return self.robot_api.services.get(template_uid=GW_UID, name=self.guid)
-
 
     def get_pgw_service(self):
         return self.public_robot_api.services.get(template_uid=PGW_UID, name=self.guid)
 
     def install(self):
-        gwdata = copy.deepcopy(self.data)
-        gwdata.pop('nodeRobot')
-        pgwdata = {
-            'httpproxies': gwdata.pop('publicHttpproxies', []),
-            'portforwards': gwdata.pop('publicPortforwards', []),
+        pgwservice = self.public_robot_api.services.find_or_create(PGW_UID, self.guid, {})
+        pgwservice.schedule_action('install').wait(die=True)
+        pginfo = pgwservice.schedule_action('info').wait(die=True).result
+        gwdata = {
+            'hostname': self.data['hostname'],
+            'networks': copy.deepcopy(self.data['networks']),
+            'domain': self.data['domain'],
         }
-        networks = gwdata.setdefault('networks', [])
-        for network in networks:
+        for network in gwdata['networks']:
             network['public'] = False
-        networks.append({
+        gwdata['networks'].append({
             'name': 'publicgw',
             'type': 'zerotier',
-            'id': PUBLIC_ZT,
+            'id': pginfo['zerotierId'],
             'public': True
         })
         gwservice = self.robot_api.services.find_or_create(GW_UID, self.guid, gwdata)
         gwservice.schedule_action('install').wait(die=True)
-        pgwservice = self.public_robot_api.services.find_or_create(PGW_UID, self.guid, pgwdata)
-        pgwservice.schedule_action('install').wait(die=True)
+        self._update_portforwards(gwservice, pgwservice)
+        self._update_proxies(gwservice, pgwservice)
+
+    def _lookup_by_name(self, collection, name, data=None):
+        data = data or self.data
+        for item in data[collection]:
+            if item['name'] == name:
+                return item
+
+    def _get_info(self, gwservice, pgwservice):
+        gwservice = gwservice or self.get_gw_service()
+        pgwservice = pgwservice or self.get_pgw_service()
+        gwinfo = gwservice.schedule_action('info').wait(die=True).result
+
+        for network in gwinfo['networks']:
+            if network['public']:
+                ztip = network['config']['cidr'].split('/')[0]
+                break
+        else:
+            raise LookupError('Could not find ZT IP on gateway')
+        return {'gwservice': gwservice, 'pgwservice': pgwservice,
+                'ztip': ztip, 'gwinfo': gwinfo}
+
+    def _update_portforwards(self, gwservice=None, pgwservice=None):
+        info = self._get_info(gwservice, pgwservice)
+        gwservice = info['gwservice']
+        pgwservice = info['pgwservice']
+        ztip = info['ztip']
+        gwinfo = info['gwinfo']
+        tobeconfigured = self.data['portforwards'][:]
+
+        # remove forwards we don't want anymore
+        usedports = set()
+        for actualforward in gwinfo['portforwards']:
+            type_, _, fwdname = actualforward['name'].partition('_')
+            if type_ != 'forward':
+                continue
+            configuredforward = self._lookup_by_name('portforwards', fwdname)
+            if not configuredforward:
+                gwservice.schedule_action('remove_portforward', args={'name': actualforward['name']}).wait(die=True)
+                pgwservice.schedule_action('remove_portforward', args={'name': fwdname}).wait(die=True)
+            else:
+                usedports.add(actualforward['srcport'])
+                tobeconfigured.remove(configuredforward)
+        # add forwards
+        vmips = {}
+        for forward in tobeconfigured:
+            vmname = forward['vm']
+            if vmname not in vmips:
+                vmips[vmname] = self._get_vm_ip(vmname)
+            port = BASEPORT
+            while port in usedports:
+                port += 1
+            usedports.add(port)
+            pgwforward = {
+                'name': forward['name'],
+                'srcport': forward['srcport'],
+                'dstport': port,
+                'dstip': ztip,
+                'protocols': forward['protocols'],
+            }
+            pgwservice.schedule_action('add_portforward', args={'forward': pgwforward}).wait(die=True)
+            gwforward = {
+                'name': 'forward_{}'.format(forward['name']),
+                'srcnetwork': 'publicgw',
+                'srcport': port,
+                'dstport': forward['dstport'],
+                'dstip': vmips[vmname],
+                'protocols': forward['protocols'],
+            }
+            try:
+                gwservice.schedule_action('add_portforward', args={'forward': gwforward}).wait(die=True)
+            except:
+                pgwservice.schedule_action('remove_portforward', args={'name': pgwforward['name']}).wait(die=True)
+                raise
+
+    def _update_proxies(self, gwservice=None, pgwservice=None):
+        info = self._get_info(gwservice, pgwservice)
+        gwservice = info['gwservice']
+        pgwservice = info['pgwservice']
+        ztip = info['ztip']
+        pgwinfo = pgwservice.schedule_action('info').wait(die=True).result
+
+        tobeconfigured = self.data['httpproxies'][:]
+
+        # remove proxies
+        toremoveforwards = []
+        for actualproxy in pgwinfo['httpproxies']:
+            name = actualproxy['name']
+            configuredproxy = self._lookup_by_name('httpproxies', name)
+            if not configuredproxy:
+                pgwservice.schedule_action('remove_http_proxy', args={'name': name}).wait(die=True)
+                toremoveforwards.append(name)
+            else:
+                tobeconfigured.remove(configuredproxy)
+
+        gwinfo = gwservice.schedule_action('info').wait(die=True).result
+        usedports = set()
+        for actualforward in gwinfo['portforwards']:
+            removed = False
+            for fwdname in toremoveforwards:
+                if actualforward['name'].startswith('proxy_{}'.format(fwdname)):
+                    gwservice.schedule_action('remove_portforward', args={'name': actualforward['name']}).wait(die=True)
+                    removed = True
+                    break
+            if not removed:
+                usedports.add(actualforward['srcport'])
+
+        # Add proxies
+        vmips = {}
+        for proxy in tobeconfigured:
+            pproxy = {
+                'host': proxy['host'],
+                'types': proxy['types'],
+                'name': proxy['name'],
+                'destinations': [],
+            }
+            fwdnames = []
+            for destination in proxy['destinations']:
+                vmname = destination['vm']
+                if vmname not in vmips:
+                    vmips[vmname] = self._get_vm_ip(vmname)
+                port = BASEPORT
+                while port in usedports:
+                    port += 1
+                usedports.add(port)
+                fwdname = 'proxy_{}_{}'.format(proxy['name'], vmname)
+                forward = {
+                    'name': fwdname,
+                    'srcport': port,
+                    'srcnetwork': 'publicgw',
+                    'dstip': vmips[vmname],
+                    'dstport': destination['port'],
+                    'protocols': ['tcp'],
+                }
+                gwservice.schedule_action('add_portforward', args={'forward': forward}).wait(die=True)
+                fwdnames.append(fwdname)
+                pproxy['destinations'].append('http://{}:{}'.format(ztip, port))
+            try:
+                pgwservice.schedule_action('add_http_proxy', args={'proxy': pproxy}).wait(die=True)
+            except:
+                for fwd in fwdnames:
+                    gwservice.schedule_action('remove_portforward', args={'name': fwd}).wait(die=True)
+                raise
 
     def _get_vm_ip(self, vm):
         vmservice = self.api.services.get(name=vm, template_uid=DM_VM_UID)
@@ -70,75 +218,67 @@ class Gateway(TemplateBase):
         return member.private_ip
 
     def info(self):
-        pgw_info = self.get_pgw_service().schedule_action('info').die(True).result
+        pgw_info = self.get_pgw_service().schedule_action('info').wait(die=True).result
         data = {
             'publicip': pgw_info['publicip'],
             'networks': self.data['networks'],
             'httpproxies': self.data['httpproxies'],
-            'publicHttpproxies': self.data['publicHttpproxies'],
             'portforwards': self.data['portforwards'],
-            'publicPortforwards': self.data['publicPortforwards'],
         }
         return data
 
-    def add_portforward(self, name, srcport, vm, dstport, protocols=None):
-        protocols = protocols or ['tcp']
-        forward = {
-            'srcnetwork': 'publicgw',
-            'srcport': srcport,
-            'dstport': dstport,
-            'dstip': self._get_vm_ip(vm),
-            'protocols': protocols,
-            'name': name
-        }
-        gwservice = self.get_gw_service()
-        gwservice.schedule_action('add_portforward', args={'forward': forward}).wait(die=True)
+    def add_portforward(self, forward):
+        forward['protocols'] = forward.get('protocols', ['tcp'])
         self.data.setdefault('portforwards', []).append(forward)
+        try:
+            self._update_portforwards()
+        except:
+            self.data['portforwards'].remove(forward)
+            raise
 
     def remove_portforward(self, name):
-        gwservice = self.get_gw_service()
-        gwservice.schedule_action('remove_portforward', args={'name': name}).wait(die=True)
-        for forward in self.data.get('portforwards', []):
-            if forward['name'] == name:
-                self.data['portforwards'].remove(forward)
+        forward = self._lookup_by_name('portforwards', name)
+        if forward:
+            self.data['portforwards'].remove(forward)
+            self._update_portforwards()
+
+    def add_http_proxy(self, proxy):
+        self.data.setdefault('httpproxies', []).append(proxy)
+        try:
+            self._update_proxies()
+        except:
+            self.data['httpproxies'].remove(proxy)
+            raise
+
+    def remove_http_proxy(self, name):
+        proxy = self._lookup_by_name('httpproxies', name)
+        if proxy:
+            self.data['httpproxies'].remove(proxy)
+            self._update_proxies()
+
+    def add_network(self, network):
+        if network.get('public'):
+            raise ValueError('Can not add public networks')
+        self.get_gw_service().schedule_action('add_network', args={'network': network}).wait(die=True)
+        self.data['networks'].append(network)
+
+    def remove_network(self, name):
+        self.get_gw_service().schedule_action('remove_network', args={'name': name}).wait(die=True)
+        for network in self.data['networks']:
+            if network['name'] == name:
+                self.data['networks'].remove(network)
                 return
 
-    def add_public_portforward(self, name, srcport, dstport, protocols=None):
-        info = self.get_gw_service().schedule_action('info').wait(die=True).result
-        for network in info['networks']:
-            if network['public']:
-                break
+    def uninstall(self):
+        try:
+            gwservice = self.get_gw_service()
+        except:
+            pass
         else:
-            raise LookupError('Could not find Public interface')
-        dstip = network['config']['cidr'].split('/')[0]
-        protocols = protocols or ['tcp']
-        forward = {
-            'name': name,
-            'srcport': srcport,
-            'dstport': dstport,
-            'dstip': dstip,
-        }
-        pgwservice = self.get_pgw_service()
-        pgwservice.schedule_action('add_portforward', args={'forward': forward}).wait(die=True)
-        self.data.setdefault('publicPortforwards', []).append(forward)
-
-    def remove_public_portforward(self, name):
-        pgwservice = self.get_pgw_service()
-        pgwservice.schedule_action('remove_portforward', args={'name': name}).wait(die=True)
-        for forward in self.data.get('publicPortforwards', []):
-            if forward['name'] == name:
-                self.data['publicPortforwards'].remove(forward)
-                return
-
-    def add_public_http_proxy(self, name, host, destinations, types=None):
-        types = types or ['https']
-        pgwservice = self.get_pgw_service()
-        proxy = {
-            'name': name,
-            'host': host,
-            'destinations': destinations,
-            'types': types
-        }
-        pgwservice.schedule_action('add_http_proxy', args={'proxy': proxy}).wait(die=True)
-        self.data.setdefault('publicHttpproxies', []).append(proxy)
-
+            gwservice.delete()
+        try:
+            pgwservice = self.get_pgw_service()
+        except:
+            pass
+        else:
+            pgwservice.delete()

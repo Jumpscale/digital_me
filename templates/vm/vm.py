@@ -103,6 +103,13 @@ class Vm(TemplateBase):
         self.state.delete('actions', 'install')
         self.state.delete('status', 'running')
 
+    def info(self):
+        self.state.check('actions', 'install', 'ok')
+        info = self._node_vm.schedule_action('info').wait(die=True).result
+        nics = info.pop('nics')
+        info['zerotier'] = {'id': nics[0]['id'], 'ztClient': nics[0]['ztClient']}
+        return info
+
     def shutdown(self):
         self.logger.info('Shuting down vm %s' % self.name)
         self.state.check('status', 'running', 'ok')
