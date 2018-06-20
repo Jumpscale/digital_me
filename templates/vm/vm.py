@@ -7,7 +7,7 @@ VM_TEMPLATE_UID = 'github.com/zero-os/0-templates/vm/0.0.1'
 ZT_TEMPLATE_UID = 'github.com/zero-os/0-templates/zerotier_client/0.0.1'
 BASEFLIST = 'https://hub.gig.tech/gig-bootable/{}.flist'
 ZEROOSFLIST = "https://hub.gig.tech/gig-bootable/zero-os-bootable.flist"
-IPXEURL = 'https://bootstrap.gig.tech/ipxe/{}/{}/development&ztid={}'
+IPXEURL = 'https://bootstrap.gig.tech/ipxe/{}/{}/development ztid={}'
 
 
 class Vm(TemplateBase):
@@ -18,7 +18,7 @@ class Vm(TemplateBase):
     def __init__(self, name, guid=None, data=None):
         super().__init__(name=name, guid=guid, data=data)
 
-        self.recurring_action('_monitor', 30)  # every 30 seconds
+        # self.recurring_action('_monitor', 30)  # every 30 seconds
         self._node_api = None
 
     def validate(self):
@@ -95,7 +95,7 @@ class Vm(TemplateBase):
 
         image, _, version = self.data['image'].partition(':')
         if image == 'zero-os':
-            version = version or 'master'
+            version = version or 'development'
             vm_data['flist'] = ZEROOSFLIST
         else:
             version = version or 'lts'
@@ -104,11 +104,11 @@ class Vm(TemplateBase):
 
         vm = self._node_api.services.create(VM_TEMPLATE_UID, self.guid, data=vm_data)
 
-        if image == 'zero-s':
+        if image == 'zero-os':
             if not self.data['ztIdentity']:
                 self.data['ztIdentity'] = vm.schedule_action('generate_identity').wait(die=True).result
             url = IPXEURL.format(version, self.data['zerotier']['id'], self.data['ztIdentity'])
-            vm.schedule_action('update_flist', args={'url': url}).wait(die=True)
+            vm.schedule_action('update_ipxeurl', args={'url': url}).wait(die=True)
 
         vm.schedule_action('install').wait(die=True)
         self.data['ztIdentity'] = vm.schedule_action('zt_identity').wait(die=True).result
