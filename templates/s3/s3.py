@@ -1,11 +1,15 @@
 import json
 import math
+import time
+import requests
 
 from js9 import j
 
 from zerorobot.template.base import TemplateBase
 
 VM_TEMPLATE_UID = 'github.com/jumpscale/digital_me/vm/0.0.1'
+MINIO_TEMPLATE_UID = 'github.com/zero-os/0-templates/minio/0.0.1'
+NS_TEMPLATE_UID = 'github.com/zero-os/0-templates/namespace/0.0.1'
 
 
 class S3(TemplateBase):
@@ -47,11 +51,11 @@ class S3(TemplateBase):
                 }
                 namespace = robot.services.create(
                     service_name=j.data.idgenerator.generateXCharID(16),
-                    template_uid='github.com/zero-os/0-templates/namespace/0.0.1', data=data)
+                    template_uid=NS_TEMPLATE_UID, data=data)
                 available = namespace.schedule_action('install', args={'if_available': True}).wait(die=True).result
                 if available:
                     best_node[storage_key] = best_node[storage_key] - self.data['storageSize']
-                    self.data['namespaces'].append(namespace.name)
+                    self.data['namespaces'].append({'name': namespace.name, 'url': best_node['robot_address'], 'node': best_node['node_id']})
                     return namespace, next_index
                 namespace.delete()
             if next_index == index:
@@ -81,6 +85,7 @@ class S3(TemplateBase):
         self._nodes = sorted(self._nodes, key=lambda k: k[storage_key], reverse=True)
 
         vm_data = {
+            'memory': 2000,
             'image': 'zero-os',
             'zerotier': {
                 'id': self.data['vmZerotier']['id'],
@@ -98,39 +103,57 @@ class S3(TemplateBase):
         vm = self.api.services.create(VM_TEMPLATE_UID, self.guid, vm_data)
         vm.schedule_action('install').wait(die=True)
         zt_identity = vm.schedule_action('zt_identity').wait(die=True).result
+        id = zt_identity.split(':', 1)[0]
         zt_client = j.clients.zerotier.get(self.data['vmZerotier']['ztClient'])
         network = zt_client.network_get(self.data['vmZerotier']['id'])
-        members = network.members_list(True)
 
-        for member in members:
-            if member['config']['identity'] == zt_identity:
-                break
-        else:
-            raise RuntimeError('Failed to find vm in zerotier network')
+        now = time.time()
 
-        vm_robot = self._get_zrobot(vm.name, 'http://{}:6600'.format(member['physicalAddress']))
+        while time.time() < now + 600:
+            members = network.members_list(True)
+            for member in members:
+                if member['config']['id'] == id:
+                    break
+            else:
+                raise RuntimeError('Failed to find vm in zerotier network')
+            if not member['config']['ipAssignments']:
+                time.sleep(10)
+
+        if not member['config']['ipAssignments']:
+            raise RuntimeError('VM has no ip assignments in zerotier network')
+
+        vm_robot = self._get_zrobot(vm.name, 'http://{}:6600'.format(member['config']['ipAssignments'][0]))
         minio_data = {
             'zerodbs': zdbs_connection,
             'namespace': self.guid,
             'nsSecret': ns_password,
+            'login': self.data['minioLogin'],
+            'password': self.data['minioPassword'],
         }
-        minio = vm_robot.services.create('github.com/zero-os/0-templates/minio/0.0.1', self.guid, minio_data)
+
+        now = time.time()
+        minio = None
+        while time.time() < now + 1200:
+            try:
+                minio = vm_robot.services.find_or_create(MINIO_TEMPLATE_UID, self.guid, minio_data)
+            except requests.ConnectionError:
+                time.sleep(10)
+
+        if not minio:
+            raise RuntimeError('Failed to create minio service')
+
         minio.schedule_action('install').wait(die=True)
         minio.schedule_action('start').wait(die=True)
+        port = minio.schedule_action('node_port').wait(die=True).result
+        self.data['minioUrl'] = 'http://{}:{}'.format(member['config']['ipAssignments'][0], port)
 
+    def uninstall(self):
+        for namespace in self.data['namespaces']:
+            robot = self._get_zrobot(namespace['node'], namespace['url'])
+            ns = robot.services.get(template_uid=NS_TEMPLATE_UID, name=namespace['name'])
+            ns.schedule_action('uninstall').wait(die=True)
+            self.data['namespaces'].remove(namespace)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        vm = self.api.services.get(template_uid=VM_TEMPLATE_UID, name=self.guid)
+        vm.schedule_action('uninstall').wait(die=True)
 
