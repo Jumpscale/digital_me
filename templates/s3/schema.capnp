@@ -27,6 +27,6 @@ struct Schema {
     name @0: Text;
     node @1: Text;
     url @2: Text;
-
+    }
 }
 
