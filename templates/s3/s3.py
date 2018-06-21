@@ -29,7 +29,9 @@ class S3(TemplateBase):
             raise ValueError('parityShards must be equal to or less than dataShards')
 
         capacity = j.clients.grid_capacity.get(interactive=False)
-        self._nodes = json.loads(capacity.api.ListCapacity(query_params={'farmer': self.data['farmerIyoOrg']})[1].content.decode('utf-8'))
+        resp = capacity.api.ListCapacity(query_params={'farmer': self.data['farmerIyoOrg']})[1]
+        resp.raise_for_status()
+        self._nodes = resp.json()
         if not self._nodes:
             raise ValueError('There are no nodes in this farm')
 
@@ -37,6 +39,7 @@ class S3(TemplateBase):
         final_index = index
         while True:
             next_index = final_index + 1 if final_index < len(self._nodes) - 2 else 0
+            # if the current node candidate has enough storage, try to create a namespace on it
             if self._nodes[final_index][storage_key] >= self.data['storageSize']:
                 best_node = self._nodes[final_index]
                 robot = self._get_zrobot(best_node['node_id'], best_node['robot_address'])
@@ -52,30 +55,42 @@ class S3(TemplateBase):
                 namespace = robot.services.create(
                     service_name=j.data.idgenerator.generateXCharID(16),
                     template_uid=NS_TEMPLATE_UID, data=data)
-                available = namespace.schedule_action('install', args={'if_available': True}).wait(die=True).result
-                if available:
+
+                task = namespace.schedule_action('install').wait()
+                if task.eco:
+                    if task.eco.exceptionclassname == 'NoNamespaceAvailability':
+                        namespace.delete()
+                    else:
+                        raise RuntimeError(task.eco.errormessage)
+                else:
                     best_node[storage_key] = best_node[storage_key] - self.data['storageSize']
                     self.data['namespaces'].append({'name': namespace.name, 'url': best_node['robot_address'], 'node': best_node['node_id']})
                     return namespace, next_index
-                namespace.delete()
+
             if next_index == index:
                 raise RuntimeError('Looped all nodes and could not find a suitable node')
             final_index = next_index
         
     def install(self):
+
+        # Calculate how many zerodbs are needed for the s3
+        # based on this https://godoc.org/github.com/zero-os/0-stor/client/datastor/pipeline#ObjectDistributionConfig
+        # I compute the max and min and settle half way between them
+        # @todo this probably needs to changed at some point
         zdb_count = 1
         if self.data['dataShards'] and not self.data['parityShards']:
             zdb_count = self.data['dataShards']
         else:
             max = self.data['dataShards'] + self.data['parityShards']
             min = self.data['dataShards'] - self.data['parityShards']
-            zdb_count = math.ceil(max + ((max - min)/2))
+            zdb_count = math.ceil(min + ((max - min)/2))
 
         storage_key = 'sru' if self.data['storageType'] == 'ssd' else 'hru'
         ns_password = j.data.idgenerator.generateXCharID(32)
         zdbs_connection = list()
         self._nodes = sorted(self._nodes, key=lambda k: k[storage_key], reverse=True)
 
+        # Create namespaces to be used as a backend for minio
         node_index = 0
         for i in range(zdb_count):
             namespace, node_index = self._create_namespace(node_index, storage_key, ns_password)
@@ -84,6 +99,7 @@ class S3(TemplateBase):
 
         self._nodes = sorted(self._nodes, key=lambda k: k[storage_key], reverse=True)
 
+        # Create the zero-os vm on which we will create the minio container
         vm_data = {
             'memory': 2000,
             'image': 'zero-os',
@@ -93,7 +109,7 @@ class S3(TemplateBase):
             },
             'disks': [{
                 'diskType': 'hdd',
-                'size': self.data['vmDiskSize'],
+                'size': 5,
                 'mountPoint': '/mnt',
                 'filesystem': 'btrfs',
                 'name': 's3vm'
@@ -109,6 +125,7 @@ class S3(TemplateBase):
 
         now = time.time()
 
+        # Wait for the vm to join the zerotier and get the assigned ip to be used for the zrobot connection
         while time.time() < now + 600:
             members = network.members_list(True)
             for member in members:
@@ -123,6 +140,8 @@ class S3(TemplateBase):
             raise RuntimeError('VM has no ip assignments in zerotier network')
 
         vm_robot = self._get_zrobot(vm.name, 'http://{}:6600'.format(member['config']['ipAssignments'][0]))
+
+        # Create the minio service on the vm
         minio_data = {
             'zerodbs': zdbs_connection,
             'namespace': self.guid,
@@ -131,6 +150,7 @@ class S3(TemplateBase):
             'password': self.data['minioPassword'],
         }
 
+        # Wait 20 mins for zerorobot until it downloads the repos and starts accepting requests
         now = time.time()
         minio = None
         while time.time() < now + 1200:
@@ -148,13 +168,22 @@ class S3(TemplateBase):
         # self.data['minioUrl'] = 'http://{}:{}'.format(member['config']['ipAssignments'][0], port)
         self.data['minioUrl'] = 'http://{}:{}'.format(member['config']['ipAssignments'][0], 9000)
 
+        self.state.set('actions', 'install', 'ok')
+
     def uninstall(self):
+        # uninstall and delete all the created namespaces
         for namespace in self.data['namespaces']:
             robot = self._get_zrobot(namespace['node'], namespace['url'])
+            # robot = self._get_zrobot('main', 'http://localhost:6600')
             ns = robot.services.get(template_uid=NS_TEMPLATE_UID, name=namespace['name'])
             ns.schedule_action('uninstall').wait(die=True)
+            ns.delete()
             self.data['namespaces'].remove(namespace)
 
+        # uninstall and delete the minio vm
         vm = self.api.services.get(template_uid=VM_TEMPLATE_UID, name=self.guid)
         vm.schedule_action('uninstall').wait(die=True)
+        vm.delete()
 
+    def url(self):
+        return self.data['minioUrl']
