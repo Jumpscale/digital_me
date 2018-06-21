@@ -144,8 +144,9 @@ class S3(TemplateBase):
 
         minio.schedule_action('install').wait(die=True)
         minio.schedule_action('start').wait(die=True)
-        port = minio.schedule_action('node_port').wait(die=True).result
-        self.data['minioUrl'] = 'http://{}:{}'.format(member['config']['ipAssignments'][0], port)
+        # port = minio.schedule_action('node_port').wait(die=True).result
+        # self.data['minioUrl'] = 'http://{}:{}'.format(member['config']['ipAssignments'][0], port)
+        self.data['minioUrl'] = 'http://{}:{}'.format(member['config']['ipAssignments'][0], 9000)
 
     def uninstall(self):
         for namespace in self.data['namespaces']:
