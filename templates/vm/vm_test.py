@@ -12,11 +12,14 @@ from zerorobot.template.state import StateCheckError
 from zerorobot import config
 from zerorobot.template_uid import TemplateUID
 
+from JumpScale9Zrobot.test.utils import ZrobotBaseTest
 
-class TestVmTemplate(TestCase):
+
+class TestVmTemplate(ZrobotBaseTest):
 
     @classmethod
     def setUpClass(cls):
+        super().preTest(os.path.dirname(__file__), Vm)
         cls.valid_data = {
             'cpu': 1,
             'image': 'ubuntu',
@@ -37,16 +40,7 @@ class TestVmTemplate(TestCase):
             'nodeRobot': 'main',
             'nodeVm': '',
         }
-
-        config.DATA_DIR = tempfile.mkdtemp(prefix='digital_me_')
-        Vm.template_uid = TemplateUID.parse('github.com/jumpscale/digital_me/%s/%s' % (Vm.template_name, Vm.version))
-        print(Vm.template_uid)
         cls.vnc_port = 5900
-
-    @classmethod
-    def tearDownClass(cls):
-        if os.path.exists(config.DATA_DIR):
-            shutil.rmtree(config.DATA_DIR)
 
     def setUp(self):
         patch('js9.j.clients', MagicMock()).start()
