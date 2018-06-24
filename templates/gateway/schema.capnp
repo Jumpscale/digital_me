@@ -7,7 +7,7 @@ struct Schema {
     portforwards @3 :List(PortForward);
     httpproxies @4 :List(HTTPProxy);
     domain @5: Text;
-    nodeRobot @6: Text;
+    nodeId @6: Text;
     publicGatewayRobot @7: Text;
 
     struct Network {

@@ -21,9 +21,18 @@ class Gateway(TemplateBase):
         super().__init__(name=name, guid=guid, data=data)
         self.add_delete_callback(self.uninstall)
 
-    @property
-    def robot_api(self):
-        return j.clients.zrobot.robots[self.data['nodeRobot']]
+    def validate(self):
+        if not self.data['nodeId']:
+            raise ValueError('Invalid input, Vm requires nodeId')
+
+        capacity = j.clients.grid_capacity.get(interactive=False)
+        nodes = capacity.api.ListCapacity(query_params={'node_id': self.data['nodeId']})[0]
+        if not nodes:
+            raise ValueError('Node {} does not exist'.format(self.data['nodeId']))
+
+        j.clients.zrobot.get(self.data['nodeId'], data={'url': nodes[0].robot_address})
+        self._robot_api = j.clients.zrobot.robots[self.data['nodeId']]
+        # self._node_api = j.clients.zrobot.robots['main']
 
     @property
     def public_robot_api(self):
@@ -35,7 +44,7 @@ class Gateway(TemplateBase):
         return j.clients.zrobot.robots[robotname]
 
     def get_gw_service(self):
-        return self.robot_api.services.get(template_uid=GW_UID, name=self.guid)
+        return self._robot_api.services.get(template_uid=GW_UID, name=self.guid)
 
     def get_pgw_service(self):
         return self.public_robot_api.services.get(template_uid=PGW_UID, name=self.guid)
@@ -57,7 +66,7 @@ class Gateway(TemplateBase):
             'id': pginfo['zerotierId'],
             'public': True
         })
-        gwservice = self.robot_api.services.find_or_create(GW_UID, self.guid, gwdata)
+        gwservice = self._robot_api.services.find_or_create(GW_UID, self.guid, gwdata)
         gwservice.schedule_action('install').wait(die=True)
         self._update_portforwards(gwservice, pgwservice)
         self._update_proxies(gwservice, pgwservice)
