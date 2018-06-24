@@ -2,6 +2,7 @@ from unittest.mock import MagicMock, patch
 from js9 import j
 import copy
 import os
+import pytest
 
 
 from gateway import Gateway, PUBLIC_GW_ROBOTS
@@ -10,6 +11,7 @@ from urllib.parse import urlparse
 from JumpScale9Zrobot.test.utils import ZrobotBaseTest
 
 PRIVATEZT = '1234567890123456'
+NODEID = 'aabbcceeff'
 
 class AlwaysTrue:
     def __eq__(self, other):
@@ -26,7 +28,7 @@ class TestGatewayTemplate(ZrobotBaseTest):
             'status': 'halted',
             'hostname': 'hostname',
             'networks': [],
-            'nodeRobot': 'main',
+            'nodeId': NODEID,
             'portforwards': [],
             'httpproxies': [],
             'domain': 'domain',
@@ -48,11 +50,15 @@ class TestGatewayTemplate(ZrobotBaseTest):
         self.robotapi.services.find_or_create.return_value = self.gateway
         self.publibcrobotapi.services.get.return_value = self.public_gateway
         self.publibcrobotapi.services.find_or_create.return_value = self.public_gateway
-        kwargs = {'main': self.robotapi}
+        kwargs = {NODEID: self.robotapi}
         for url in PUBLIC_GW_ROBOTS:
             key = urlparse(url).netloc
             kwargs[key] = self.publibcrobotapi
         j.clients.zrobot.robots = kwargs
+        capacity = MagicMock()
+        self.mocknodes = [MagicMock(robot_address='url')]
+        capacity.api.ListCapacity.return_value = (self.mocknodes, )
+        j.clients.grid_capacity.get.return_value = capacity
 
         # public gateay info
         self.public_gateway_info = {'httpproxies': [], 'zerotierId': 'abcdef1234567890'}
@@ -81,9 +87,19 @@ class TestGatewayTemplate(ZrobotBaseTest):
         self.service.data.pop('publicGatewayRobot', None)
         assert self.service.data == self.valid_data
 
+
+    def test_create_invalid_data(self):
+        data = copy.deepcopy(self.valid_data)
+        data['nodeId'] = '112233445566'
+        self._mock_service(data)
+        self.mocknodes.clear()
+        with pytest.raises(ValueError, message='Node should not be found'):
+            self.service.validate()
+
     def test_get_info(self):
         data = copy.deepcopy(self.valid_data)
         self._mock_service(data)
+        self.service.validate()
         data = self.service._get_info(None, None)
         assert data['ztip'] == '172.18.0.1'
         assert data['gwservice'] == self.gateway
@@ -95,6 +111,7 @@ class TestGatewayTemplate(ZrobotBaseTest):
         """
         data = copy.deepcopy(self.valid_data)
         self._mock_service(data)
+        self.service.validate()
         self.service.install()
         self.gateway.schedule_action.assert_any_call('install')
 
@@ -105,6 +122,7 @@ class TestGatewayTemplate(ZrobotBaseTest):
         data = copy.deepcopy(self.valid_data)
         data['networks'] = [{'name': 'network', 'type': 'zerotier', 'id': PRIVATEZT}]
         self._mock_service(data)
+        self.service.validate()
         portforward = {'name': 'pf', 'vm': 'myvm', 'dstport': 22, 'srcport': 22, 'protocols': ['tcp']}
         self.service.add_portforward(portforward)
         assert self.service.data['portforwards'] == [portforward]
@@ -130,6 +148,7 @@ class TestGatewayTemplate(ZrobotBaseTest):
         data = copy.deepcopy(self.valid_data)
         data['networks'] = [{'name': 'network', 'type': 'zerotier', 'id': PRIVATEZT}]
         self._mock_service(data)
+        self.service.validate()
         proxy = {'name': 'myproxy', 'destinations': [{'vm': 'myvm', 'port': 8282}], 'host': '172.19.0.1', 'types': ['http']}
         self.service.add_http_proxy(proxy)
         assert self.service.data['httpproxies'] == [proxy]
