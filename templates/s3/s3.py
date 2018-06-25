@@ -123,25 +123,28 @@ class S3(TemplateBase):
         zt_client = j.clients.zerotier.get(self.data['vmZerotier']['ztClient'])
         network = zt_client.network_get(self.data['vmZerotier']['id'])
 
-        now = time.time()
-
-        # Wait for the vm to join the zerotier and get the assigned ip to be used for the zrobot connection
-        while time.time() < now + 600:
-            members = network.members_list(True)
-            for member in members:
-                if member['config']['id'] == id:
-                    break
-            else:
+        try:
+            member = network.member_get(address=id)
+        except RuntimeError as e:
+            if str(e) == 'Cannot find a member that match the provided filters':
                 raise RuntimeError('Failed to find vm in zerotier network')
-            if not member['config']['ipAssignments']:
-                time.sleep(10)
             else:
-                break
+                raise
 
-        if not member['config']['ipAssignments']:
+        # Wait for the vm to the zerotier and get the assigned ip to be used for the zrobot connection
+        ip = None
+        now = time.time()
+        while time.time() < now + 600:
+            try:
+                ip = member.private_ip
+                break
+            except ValueError:
+                continue
+
+        if not ip:
             raise RuntimeError('VM has no ip assignments in zerotier network')
 
-        vm_robot = self._get_zrobot(vm.name, 'http://{}:6600'.format(member['config']['ipAssignments'][0]))
+        vm_robot = self._get_zrobot(vm.name, 'http://{}:6600'.format(ip))
 
         # Create the minio service on the vm
         minio_data = {
@@ -168,7 +171,7 @@ class S3(TemplateBase):
         minio.schedule_action('install').wait(die=True)
         minio.schedule_action('start').wait(die=True)
         port = minio.schedule_action('node_port').wait(die=True).result
-        self.data['minioUrl'] = 'http://{}:{}'.format(member['config']['ipAssignments'][0], port)
+        self.data['minioUrl'] = 'http://{}:{}'.format(ip, port)
 
         self.state.set('actions', 'install', 'ok')
 

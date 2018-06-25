@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, PropertyMock
 import os
 import requests
 import pytest
@@ -37,7 +37,7 @@ class TestS3Template(ZrobotBaseTest):
     def tearDown(self):
         patch.stopall()
 
-    def test_get_zroboto(self):
+    def test_get_zrobot(self):
         patch('js9.j.clients.zrobot', MagicMock(robots={'main': 'main'})).start()
         robot = self.s3._get_zrobot('main', 'url')
         assert j.clients.zrobot.get.called_once_with('main', data={'url': 'url'})
@@ -106,7 +106,7 @@ class TestS3Template(ZrobotBaseTest):
             assert self.s3._nodes[0]['sru'] == 10
             assert self.s3.data['namespaces'] == [{'name': 'name', 'url': 'robot_address', 'node': 'node_id'}]
 
-    def test_install_failed_to_find_network(self):
+    def test_install_failed_to_find_vm(self):
         with pytest.raises(RuntimeError, message='template should fail if it fails to find vm in zt network'):
             self.s3._nodes = [{'sru': 20, 'node_id': 'node_id', 'robot_address': 'robot_address'}]
             self.s3._create_namespace = MagicMock()
@@ -114,6 +114,9 @@ class TestS3Template(ZrobotBaseTest):
             namespace.schedule_action.return_value.wait.return_value.result = {'ip': '127.0.0.01', 'port': 9000}
             self.s3._create_namespace.return_value = (namespace, 0)
             self.s3.api.services.create = MagicMock()
+            zt_client = MagicMock()
+            zt_client.network_get.return_value.member_get.side_effect = RuntimeError('Cannot find a member that match the provided filters')
+            patch('js9.j.clients.zerotier.get.return_value', zt_client).start()
             self.s3.install()
 
     def test_install_no_ip_assignments(self):
@@ -127,10 +130,9 @@ class TestS3Template(ZrobotBaseTest):
             vm.schedule_action.return_value.wait.return_value.result = 'id:'
             self.s3.api.services.create = MagicMock(return_value=vm)
             zt_client = MagicMock()
-            zt_client.network_get.return_value.members_list.return_value = [{'config': {'id': 'id', 'ipAssignments': []}}]
+            zt_client.network_get.return_value.member_get.return_value.private_ip = None
             patch('js9.j.clients.zerotier.get.return_value', zt_client).start()
-            patch('time.time', MagicMock(side_effect=[1, 2, 700])).start()
-            patch('time.sleep', MagicMock()).start()
+            patch('time.time', MagicMock(side_effect=[1, 2, 3, 700])).start()
             self.s3.install()
 
     def test_install_minio_fails(self):
@@ -144,7 +146,7 @@ class TestS3Template(ZrobotBaseTest):
             vm.schedule_action.return_value.wait.return_value.result = 'id:'
             self.s3.api.services.create = MagicMock(return_value=vm)
             zt_client = MagicMock()
-            zt_client.network_get.return_value.members_list.return_value = [{'config': {'id': 'id', 'ipAssignments': ['ip']}}]
+            zt_client.network_get.return_value.member_get.return_value.private_ip = 'ip'
             patch('js9.j.clients.zerotier.get.return_value', zt_client).start()
             patch('time.time', MagicMock(side_effect=[1, 2, 1, 2, 1300])).start()
             patch('time.sleep', MagicMock()).start()
@@ -163,7 +165,7 @@ class TestS3Template(ZrobotBaseTest):
         vm.schedule_action.return_value.wait.return_value.result = 'id:'
         self.s3.api.services.create = MagicMock(return_value=vm)
         zt_client = MagicMock()
-        zt_client.network_get.return_value.members_list.return_value = [{'config': {'id': 'id', 'ipAssignments': ['ip']}}]
+        zt_client.network_get.return_value.member_get.return_value.private_ip = 'ip'
         patch('js9.j.clients.zerotier.get.return_value', zt_client).start()
         minio = MagicMock()
         minio.schedule_action.return_value.wait.return_value.result = 9001
