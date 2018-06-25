@@ -32,7 +32,6 @@ class Vm(TemplateBase):
 
         j.clients.zrobot.get(self.data['nodeId'], data={'url': nodes[0].robot_address})
         self._node_api = j.clients.zrobot.robots[self.data['nodeId']]
-        # self._node_api = j.clients.zrobot.robots['main']
 
         if self.data['image'].partition(':')[0] not in ['zero-os', 'ubuntu']:
             raise ValueError('Invalid image')

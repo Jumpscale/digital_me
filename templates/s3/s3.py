@@ -32,6 +32,7 @@ class S3(TemplateBase):
         resp = capacity.api.ListCapacity(query_params={'farmer': self.data['farmerIyoOrg']})[1]
         resp.raise_for_status()
         self._nodes = resp.json()
+
         if not self._nodes:
             raise ValueError('There are no nodes in this farm')
 
@@ -43,7 +44,6 @@ class S3(TemplateBase):
             if self._nodes[final_index][storage_key] >= self.data['storageSize']:
                 best_node = self._nodes[final_index]
                 robot = self._get_zrobot(best_node['node_id'], best_node['robot_address'])
-                #robot = self._get_zrobot('main', 'http://localhost:6600')
                 data = {
                     'disktype': self.data['storageType'],
                     'mode': 'user',
@@ -81,9 +81,9 @@ class S3(TemplateBase):
         if self.data['dataShards'] and not self.data['parityShards']:
             zdb_count = self.data['dataShards']
         else:
-            max = self.data['dataShards'] + self.data['parityShards']
-            min = self.data['dataShards'] - self.data['parityShards']
-            zdb_count = math.ceil(min + ((max - min)/2))
+            max_zdb = self.data['dataShards'] + self.data['parityShards']
+            min_zdb = self.data['dataShards'] - self.data['parityShards']
+            zdb_count = math.ceil(min_zdb + ((max_zdb - min_zdb)/2))
 
         storage_key = 'sru' if self.data['storageType'] == 'ssd' else 'hru'
         ns_password = j.data.idgenerator.generateXCharID(32)
@@ -135,6 +135,8 @@ class S3(TemplateBase):
                 raise RuntimeError('Failed to find vm in zerotier network')
             if not member['config']['ipAssignments']:
                 time.sleep(10)
+            else:
+                break
 
         if not member['config']['ipAssignments']:
             raise RuntimeError('VM has no ip assignments in zerotier network')
@@ -156,6 +158,7 @@ class S3(TemplateBase):
         while time.time() < now + 1200:
             try:
                 minio = vm_robot.services.find_or_create(MINIO_TEMPLATE_UID, self.guid, minio_data)
+                break
             except requests.ConnectionError:
                 time.sleep(10)
 
@@ -164,9 +167,8 @@ class S3(TemplateBase):
 
         minio.schedule_action('install').wait(die=True)
         minio.schedule_action('start').wait(die=True)
-        # port = minio.schedule_action('node_port').wait(die=True).result
-        # self.data['minioUrl'] = 'http://{}:{}'.format(member['config']['ipAssignments'][0], port)
-        self.data['minioUrl'] = 'http://{}:{}'.format(member['config']['ipAssignments'][0], 9000)
+        port = minio.schedule_action('node_port').wait(die=True).result
+        self.data['minioUrl'] = 'http://{}:{}'.format(member['config']['ipAssignments'][0], port)
 
         self.state.set('actions', 'install', 'ok')
 
