@@ -81,7 +81,7 @@ class TestVmTemplate(ZrobotBaseTest):
         Test creating a vm service with valid data
         """
         capacity = MagicMock()
-        capacity.api.ListCapacity.return_value = ([MagicMock(robot_address='url')],)
+        capacity.api.GetCapacity.return_value = (MagicMock(robot_address='url'), None)
         patch('js9.j.clients.grid_capacity.get.return_value', capacity).start()
         vm = Vm('vm', data=self.valid_data)
         vm.validate()
@@ -100,6 +100,10 @@ class TestVmTemplate(ZrobotBaseTest):
         Test successfully creating a vm
         """
         disk = self.valid_data['disks'][0]
+        capacity = MagicMock()
+        capacity.api.GetCapacity.return_value = (MagicMock(robot_address='url'), None)
+        patch('js9.j.clients.grid_capacity.get.return_value', capacity).start()
+
         self.vm.validate()
         zt_client = MagicMock()
         zt_client.schedule_action.return_value.wait.return_value.result = 'token'
