@@ -32,6 +32,7 @@ class S3(TemplateBase):
         resp = capacity.api.ListCapacity(query_params={'farmer': self.data['farmerIyoOrg']})[1]
         resp.raise_for_status()
         self._nodes = resp.json()
+
         if not self._nodes:
             raise ValueError('There are no nodes in this farm')
 
@@ -43,7 +44,6 @@ class S3(TemplateBase):
             if self._nodes[final_index][storage_key] >= self.data['storageSize']:
                 best_node = self._nodes[final_index]
                 robot = self._get_zrobot(best_node['node_id'], best_node['robot_address'])
-                #robot = self._get_zrobot('main', 'http://localhost:6600')
                 data = {
                     'disktype': self.data['storageType'],
                     'mode': 'user',
@@ -81,9 +81,9 @@ class S3(TemplateBase):
         if self.data['dataShards'] and not self.data['parityShards']:
             zdb_count = self.data['dataShards']
         else:
-            max = self.data['dataShards'] + self.data['parityShards']
-            min = self.data['dataShards'] - self.data['parityShards']
-            zdb_count = math.ceil(min + ((max - min)/2))
+            max_zdb = self.data['dataShards'] + self.data['parityShards']
+            min_zdb = self.data['dataShards'] - self.data['parityShards']
+            zdb_count = math.ceil(min_zdb + ((max_zdb - min_zdb)/2))
 
         storage_key = 'sru' if self.data['storageType'] == 'ssd' else 'hru'
         ns_password = j.data.idgenerator.generateXCharID(32)
@@ -123,23 +123,28 @@ class S3(TemplateBase):
         zt_client = j.clients.zerotier.get(self.data['vmZerotier']['ztClient'])
         network = zt_client.network_get(self.data['vmZerotier']['id'])
 
-        now = time.time()
-
-        # Wait for the vm to join the zerotier and get the assigned ip to be used for the zrobot connection
-        while time.time() < now + 600:
-            members = network.members_list(True)
-            for member in members:
-                if member['config']['id'] == id:
-                    break
-            else:
+        try:
+            member = network.member_get(address=id)
+        except RuntimeError as e:
+            if str(e) == 'Cannot find a member that match the provided filters':
                 raise RuntimeError('Failed to find vm in zerotier network')
-            if not member['config']['ipAssignments']:
-                time.sleep(10)
+            else:
+                raise
 
-        if not member['config']['ipAssignments']:
+        # Wait for the vm to the zerotier and get the assigned ip to be used for the zrobot connection
+        ip = None
+        now = time.time()
+        while time.time() < now + 600:
+            try:
+                ip = member.private_ip
+                break
+            except ValueError:
+                continue
+
+        if not ip:
             raise RuntimeError('VM has no ip assignments in zerotier network')
 
-        vm_robot = self._get_zrobot(vm.name, 'http://{}:6600'.format(member['config']['ipAssignments'][0]))
+        vm_robot = self._get_zrobot(vm.name, 'http://{}:6600'.format(ip))
 
         # Create the minio service on the vm
         minio_data = {
@@ -156,6 +161,7 @@ class S3(TemplateBase):
         while time.time() < now + 1200:
             try:
                 minio = vm_robot.services.find_or_create(MINIO_TEMPLATE_UID, self.guid, minio_data)
+                break
             except requests.ConnectionError:
                 time.sleep(10)
 
@@ -164,9 +170,8 @@ class S3(TemplateBase):
 
         minio.schedule_action('install').wait(die=True)
         minio.schedule_action('start').wait(die=True)
-        # port = minio.schedule_action('node_port').wait(die=True).result
-        # self.data['minioUrl'] = 'http://{}:{}'.format(member['config']['ipAssignments'][0], port)
-        self.data['minioUrl'] = 'http://{}:{}'.format(member['config']['ipAssignments'][0], 9000)
+        port = minio.schedule_action('node_port').wait(die=True).result
+        self.data['minioUrl'] = 'http://{}:{}'.format(ip, port)
 
         self.state.set('actions', 'install', 'ok')
 
