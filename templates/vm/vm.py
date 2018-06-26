@@ -1,6 +1,7 @@
 from js9 import j
 from zerorobot.template.base import TemplateBase
 from zerorobot.template.state import StateCheckError
+from requests import HTTPError
 
 VDISK_TEMPLATE_UID = 'github.com/zero-os/0-templates/vdisk/0.0.1'
 VM_TEMPLATE_UID = 'github.com/zero-os/0-templates/vm/0.0.1'
@@ -26,11 +27,14 @@ class Vm(TemplateBase):
             raise ValueError('Invalid input, Vm requires nodeId')
 
         capacity = j.clients.grid_capacity.get(interactive=False)
-        nodes = capacity.api.ListCapacity(query_params={'node_id': self.data['nodeId']})[0]
-        if not nodes:
-            raise ValueError('Node {} does not exist'.format(self.data['nodeId']))
+        try:
+            node, _ = capacity.api.GetCapacity(self.data['nodeId'])
+        except HTTPError as err:
+            if err.response.status_code == 404:
+                raise ValueError('Node {} does not exist'.format(self.data['nodeId']))
+            raise err
 
-        j.clients.zrobot.get(self.data['nodeId'], data={'url': nodes[0].robot_address})
+        j.clients.zrobot.get(self.data['nodeId'], data={'url': node.robot_address})
         self._node_api = j.clients.zrobot.robots[self.data['nodeId']]
 
         if self.data['image'].partition(':')[0] not in ['zero-os', 'ubuntu']:
@@ -57,7 +61,7 @@ class Vm(TemplateBase):
 
     def install(self):
         self.logger.info('Installing vm %s' % self.name)
-    
+
         zt_name = self.data['zerotier']['ztClient']
         zt_client = self.api.services.get(name=zt_name, template_uid=ZT_TEMPLATE_UID)
         token = zt_client.schedule_action('token').wait(die=True).result
