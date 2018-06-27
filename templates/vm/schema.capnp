@@ -30,7 +30,7 @@ struct Schema {
       size @1: UInt16;
       mountPoint @2: Text;
       filesystem @3: FsType;
-      name @4: Text;
+      label @4: Text;
    }
 
     enum DiskType{

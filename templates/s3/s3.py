@@ -112,7 +112,7 @@ class S3(TemplateBase):
                 'size': 5,
                 'mountPoint': '/mnt',
                 'filesystem': 'btrfs',
-                'name': 's3vm'
+                'label': 's3vm'
             }],
             'nodeId': self._nodes[0]['node_id'],
         }

@@ -69,14 +69,13 @@ class Vm(TemplateBase):
 
         vm_disks = []
         for disk in self.data['disks']:
-            vdisk = self._node_api.services.create(VDISK_TEMPLATE_UID, '_'.join([self.guid, disk['name']]), data=disk)
+            vdisk = self._node_api.services.find_or_create(VDISK_TEMPLATE_UID, '_'.join([self.guid, disk['label']]), data=disk)
             vdisk.schedule_action('install').wait(die=True)
-            url = vdisk.schedule_action('private_url').wait(die=True).result
             vm_disks.append({
-                'url': url,
-                'name': disk['name'],
+                'name': vdisk.name,
                 'mountPoint': disk['mountPoint'],
                 'filesystem': disk['filesystem'],
+                'label': disk['label'],
             })
 
         vm_data = {
@@ -105,7 +104,7 @@ class Vm(TemplateBase):
             flist = '{}:{}'.format(image, version)
             vm_data['flist'] = BASEFLIST.format(flist)
 
-        vm = self._node_api.services.create(VM_TEMPLATE_UID, self.guid, data=vm_data)
+        vm = self._node_api.services.find_or_create(VM_TEMPLATE_UID, self.guid, data=vm_data)
 
         if image == 'zero-os':
             if not self.data['ztIdentity']:
@@ -124,7 +123,6 @@ class Vm(TemplateBase):
 
     def uninstall(self):
         self.logger.info('Uninstalling vm %s' % self.name)
-        self.state.check('actions', 'install', 'ok')
         self._node_vm.schedule_action('uninstall').wait(die=True)
         self.state.delete('actions', 'install')
         self.state.delete('status', 'running')
