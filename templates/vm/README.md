@@ -19,7 +19,7 @@ Zerotier:
 - `ztClient`: zerotier client name to be used for authorization.
 
 Disk:
-- `name`: name of the disk.
+- `label`: label to be given to the disk on the vm
 - `diskType`: type of the disk. Value should be from enum DiskType.
 - `size`: size of the disk.
 - `mountPoint`: path where this disk should be mounted.
@@ -64,7 +64,7 @@ data = {
         'size': 10,
         'mountPoint': '/mnt',
         'filesystem': 'btrfs',
-        'name': 'test',
+        'label': 'test',
     }],
     'zerotier': [{'id':'9f77fc393e820576', 'ztClient': 'main'}],
     'image': 'ubuntu',
@@ -89,7 +89,7 @@ services:
               size: 10
               mountPoint: /mnt
               filesystem: btrfs
-              name: test
+              label: test
           zerotier:
             id: 9f77fc393e820576
             ztClient: main

@@ -33,7 +33,7 @@ class TestVmTemplate(ZrobotBaseTest):
                 'size': 10,
                 'mountPoint': '/mnt',
                 'filesystem': 'btrfs',
-                'name': 'test',
+                'label': 'test',
             }],
             'configs': [],
             'ztIdentity': '',
@@ -108,18 +108,18 @@ class TestVmTemplate(ZrobotBaseTest):
         zt_client = MagicMock()
         zt_client.schedule_action.return_value.wait.return_value.result = 'token'
         self.vm.api.services.get = MagicMock(return_value=zt_client)
-        create = self.vm._node_api.services.create
-        create.return_value.schedule_action.return_value.wait.return_value.result = 'url'
+        vdisk_name = '_'.join([self.vm.guid, disk['label']])
+        create = self.vm._node_api.services.find_or_create
+        create.return_value.name = vdisk_name
         self.vm.install()
         zt_client.schedule_action.assert_called_once_with('token')
-        self.vm._node_api.services.find_or_create.assert_called_once_with(ZT_TEMPLATE_UID, self.valid_data['zerotier']['ztClient'], {'token': 'token'})
-        create.return_value.schedule_action.assert_has_calls([call('install'), call('private_url'), call('install')], any_order=True)
+        assert self.vm._node_api.services.find_or_create.call_count == 3
 
         disks = [{
-            'url': 'url',
-            'name': disk['name'],
+            'name': vdisk_name,
             'mountPoint': disk['mountPoint'],
             'filesystem': disk['filesystem'],
+            'label': disk['label'],
         }]
 
         vm_data = {
@@ -139,9 +139,10 @@ class TestVmTemplate(ZrobotBaseTest):
                  }],
             'flist': 'https://hub.gig.tech/gig-bootable/ubuntu:lts.flist'
         }
-        vdisk_create = call(VDISK_TEMPLATE_UID, '_'.join([self.vm.guid, disk['name']]), data=disk)
+        vdisk_create = call(VDISK_TEMPLATE_UID, '_'.join([self.vm.guid, disk['label']]), data=disk)
         vm_create = call(VM_TEMPLATE_UID, self.vm.guid, data=vm_data)
-        create.assert_has_calls([vdisk_create, vm_create], any_order=True)
+        zt_create = call(ZT_TEMPLATE_UID, self.valid_data['zerotier']['ztClient'], {'token': 'token'})
+        create.assert_has_calls([zt_create, vdisk_create,  vm_create], any_order=True)
         self.vm.state.check('actions', 'install', 'ok')
         self.vm.state.check('status', 'running', 'ok')
 
@@ -157,13 +158,6 @@ class TestVmTemplate(ZrobotBaseTest):
             self.vm.state.check('actions', 'install', 'ok')
         with pytest.raises(StateCheckError):
             self.vm.state.check('status', 'running', 'ok')
-
-    def test_uninstall_vm_not_installed(self):
-        """
-        Test uninstalling vm before install
-        """
-        with pytest.raises(StateCheckError, message='uninstall vm before install should raise an error'):
-            self.vm.uninstall()
 
     def test_shutdown_vm_not_running(self):
         """
