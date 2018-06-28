@@ -9,7 +9,7 @@ It abstracts all the logic required to create public forwards and http(s) proxie
 
 - `hostname`: Container hostname.
 - `domain`: Domain for the private networks
-- `nodeRobot`: Instance of the noderobot to connect to deploy private gateway
+- `nodeId`: Node ID that will be lookedup at capacity.threefoldtoken.com to connect to deploy private gateway
 - `publicGatewayRobot`: Instance of the noderobot to connecto deploy public gateway service (will be picked automaticly)
 - `portforwards`: list of Portforward tcp/udp forwards from public network to private network
 - `httpproxies`: list of HTTPProxy. Reverse http/https proxy to allow one public ip to host multiple http services
