@@ -123,7 +123,22 @@ class Vm(TemplateBase):
 
     def uninstall(self):
         self.logger.info('Uninstalling vm %s' % self.name)
-        self._node_vm.schedule_action('uninstall').wait(die=True)
+        for disk in self.data['disks']:
+            try:
+                vdisk = self._node_api.services.get(name='_'.join([self.guid, disk['label']]))
+            except:
+                pass
+            else:
+                vdisk.schedule_action('uninstall').wait(die=True)
+                vdisk.delete()
+
+        try:
+            vm = self._node_vm
+        except:
+            pass
+        else:
+            vm.schedule_action('uninstall').wait(die=True)
+            vm.delete()
         self.state.delete('actions', 'install')
         self.state.delete('status', 'running')
 
