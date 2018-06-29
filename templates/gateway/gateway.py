@@ -11,6 +11,7 @@ PUBLIC_GW_ROBOTS = ["http://gw1.robot.threefoldtoken.com:6600", "http://gw2.robo
 
 GW_UID = 'github.com/zero-os/0-templates/gateway/0.0.1'
 PGW_UID = 'github.com/zero-os/0-templates/public_gateway/0.0.1'
+ZEROTIERCLIENT_UID = 'github/zero-os/0-templates/zerotier_client/0.0.1'
 DM_VM_UID = 'github.com/jumpscale/digital_me/vm/0.0.1'
 
 
@@ -24,6 +25,7 @@ class Gateway(TemplateBase):
     def __init__(self, name, guid=None, data=None):
         super().__init__(name=name, guid=guid, data=data)
         self.add_delete_callback(self.uninstall)
+        self._robot_url = None
 
     def validate(self):
         if not self.data['nodeId']:
@@ -37,9 +39,9 @@ class Gateway(TemplateBase):
                 raise ValueError('Node {} does not exist'.format(self.data['nodeId']))
             raise err
 
-        j.clients.zrobot.get(self.data['nodeId'], data={'url': node.robot_address})
+        self._robot_url = node.robot_address
+        j.clients.zrobot.get(self.data['nodeId'], data={'url': self._robot_url})
         self._robot_api = j.clients.zrobot.robots[self.data['nodeId']]
-        # self._node_api = j.clients.zrobot.robots['main']
 
     @property
     def public_robot_api(self):
@@ -57,16 +59,20 @@ class Gateway(TemplateBase):
         return self.public_robot_api.services.get(template_uid=PGW_UID, name=self.guid)
 
     def install(self):
-        pgwservice = self.public_robot_api.services.find_or_create(PGW_UID, self.guid, {})
-        pgwservice.schedule_action('install').wait(die=True)
-        pginfo = pgwservice.schedule_action('info').wait(die=True).result
         gwdata = {
             'hostname': self.data['hostname'],
             'networks': copy.deepcopy(self.data['networks']),
             'domain': self.data['domain'],
         }
         for network in gwdata['networks']:
+            if network['type'] == 'zerotier' and network.get('ztClient'):
+                zerotierservice = self.api.services.get(name=network['ztClient'])
+                data = {'url': self._robot_url, 'serviceguid': self.guid}
+                zerotierservice.schedule_action('add_to_robot', args=data).wait(die=True)
             network['public'] = False
+        pgwservice = self.public_robot_api.services.find_or_create(PGW_UID, self.guid, {})
+        pgwservice.schedule_action('install').wait(die=True)
+        pginfo = pgwservice.schedule_action('info').wait(die=True).result
         gwdata['networks'].append({
             'name': 'publicgw',
             'type': 'zerotier',
@@ -298,3 +304,8 @@ class Gateway(TemplateBase):
             pass
         else:
             pgwservice.delete()
+        for network in self.data['networks']:
+            if network['type'] == 'zerotier' and network.get('ztClient'):
+                zerotierservice = self.api.services.get(name=network['ztClient'])
+                data = {'url': self._robot_url, 'serviceguid': self.guid}
+                zerotierservice.schedule_action('remove_from_robot', args=data).wait(die=True)
