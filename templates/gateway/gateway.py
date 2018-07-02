@@ -44,7 +44,7 @@ class Gateway(TemplateBase):
         self._robot_api = j.clients.zrobot.robots[self.data['nodeId']]
 
     @property
-    def public_robot_api(self):
+    def _public_robot_api(self):
         if not self.data.get('publicGatewayRobot'):
             self.data['publicGatewayRobot'] = random.choice(PUBLIC_GW_ROBOTS)
         roboturl = self.data['publicGatewayRobot']
@@ -52,11 +52,11 @@ class Gateway(TemplateBase):
         j.clients.zrobot.get(robotname, {'url': roboturl}, interactive=False)
         return j.clients.zrobot.robots[robotname]
 
-    def get_gw_service(self):
+    def _get_gw_service(self):
         return self._robot_api.services.get(template_uid=GW_UID, name=self.guid)
 
-    def get_pgw_service(self):
-        return self.public_robot_api.services.get(template_uid=PGW_UID, name=self.guid)
+    def _get_pgw_service(self):
+        return self._public_robot_api.services.get(template_uid=PGW_UID, name=self.guid)
 
     def install(self):
         gwdata = {
@@ -70,7 +70,7 @@ class Gateway(TemplateBase):
                 data = {'url': self._robot_url, 'serviceguid': self.guid}
                 zerotierservice.schedule_action('add_to_robot', args=data).wait(die=True)
             network['public'] = False
-        pgwservice = self.public_robot_api.services.find_or_create(PGW_UID, self.guid, {})
+        pgwservice = self._public_robot_api.services.find_or_create(PGW_UID, self.guid, {})
         pgwservice.schedule_action('install').wait(die=True)
         pginfo = pgwservice.schedule_action('info').wait(die=True).result
         gwdata['networks'].append({
@@ -91,8 +91,8 @@ class Gateway(TemplateBase):
                 return item
 
     def _get_info(self, gwservice, pgwservice):
-        gwservice = gwservice or self.get_gw_service()
-        pgwservice = pgwservice or self.get_pgw_service()
+        gwservice = gwservice or self._get_gw_service()
+        pgwservice = pgwservice or self._get_pgw_service()
         gwinfo = gwservice.schedule_action('info').wait(die=True).result
 
         for network in gwinfo['networks']:
@@ -240,7 +240,7 @@ class Gateway(TemplateBase):
         return member.private_ip
 
     def info(self):
-        pgw_info = self.get_pgw_service().schedule_action('info').wait(die=True).result
+        pgw_info = self._get_pgw_service().schedule_action('info').wait(die=True).result
         data = {
             'publicip': pgw_info['publicip'],
             'networks': self.data['networks'],
@@ -281,11 +281,11 @@ class Gateway(TemplateBase):
     def add_network(self, network):
         if network.get('public'):
             raise ValueError('Can not add public networks')
-        self.get_gw_service().schedule_action('add_network', args={'network': network}).wait(die=True)
+        self._get_gw_service().schedule_action('add_network', args={'network': network}).wait(die=True)
         self.data['networks'].append(network)
 
     def remove_network(self, name):
-        self.get_gw_service().schedule_action('remove_network', args={'name': name}).wait(die=True)
+        self._get_gw_service().schedule_action('remove_network', args={'name': name}).wait(die=True)
         for network in self.data['networks']:
             if network['name'] == name:
                 self.data['networks'].remove(network)
@@ -293,13 +293,13 @@ class Gateway(TemplateBase):
 
     def uninstall(self):
         try:
-            gwservice = self.get_gw_service()
+            gwservice = self._get_gw_service()
         except:
             pass
         else:
             gwservice.delete()
         try:
-            pgwservice = self.get_pgw_service()
+            pgwservice = self._get_pgw_service()
         except:
             pass
         else:
