@@ -66,7 +66,7 @@ data = {
         'filesystem': 'btrfs',
         'label': 'test',
     }],
-    'zerotier': [{'id':'9f77fc393e820576', 'ztClient': 'main'}],
+    'zerotier': {'id':'9f77fc393e820576', 'ztClient': 'main'},
     'image': 'ubuntu',
     'configs': [{'path': '/root/.ssh/authorized_keys', 'content': 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDC8tBgGU1', 'name': 'sshkey'}]
 }

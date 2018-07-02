@@ -120,5 +120,5 @@ proxy = {'name': 'myproxy', 'host': '192.168.59.200', 'types': ['http'], 'destin
 dmgw.schedule_action('add_http_proxy', args={'proxy': proxy}).wait(die=True) 
 
 # remove it again
-dmgw.schedule_action('add_http_proxy', args={'proxy': proxy}).wait(die=True) 
+dmgw.schedule_action('remove_http_proxy', args={'proxy': proxy}).wait(die=True) 
 ```

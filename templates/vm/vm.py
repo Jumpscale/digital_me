@@ -19,7 +19,7 @@ class Vm(TemplateBase):
     def __init__(self, name, guid=None, data=None):
         super().__init__(name=name, guid=guid, data=data)
 
-        # self.recurring_action('_monitor', 30)  # every 30 seconds
+        self.recurring_action('_monitor', 30)  # every 30 seconds
         self._node_api = None
 
     def validate(self):
@@ -90,9 +90,9 @@ class Vm(TemplateBase):
                 'ztClient': self.data['zerotier']['ztClient'],
                 'name': 'zerotier_nic',
             },
-            {'name': 'test',
-             'type': 'default'
-            }]
+                {'name': 'test',
+                 'type': 'default'
+                 }]
         }
 
         image, _, version = self.data['image'].partition(':')

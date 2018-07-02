@@ -1,8 +1,11 @@
-from zerorobot.template.base import TemplateBase
-from js9 import j
-from urllib.parse import urlparse
-import random
 import copy
+import random
+from urllib.parse import urlparse
+
+from requests import HTTPError
+
+from js9 import j
+from zerorobot.template.base import TemplateBase
 
 PUBLIC_GW_ROBOTS = ["http://gw1.robot.threefoldtoken.com:6600", "http://gw2.robot.threefoldtoken.com:6600", "http://gw3.robot.threefoldtoken.com:6600"]
 
@@ -12,6 +15,7 @@ DM_VM_UID = 'github.com/jumpscale/digital_me/vm/0.0.1'
 
 
 BASEPORT = 10000
+
 
 class Gateway(TemplateBase):
     version = '0.0.1'
@@ -26,11 +30,14 @@ class Gateway(TemplateBase):
             raise ValueError('Invalid input, Vm requires nodeId')
 
         capacity = j.clients.grid_capacity.get(interactive=False)
-        nodes = capacity.api.ListCapacity(query_params={'node_id': self.data['nodeId']})[0]
-        if not nodes:
-            raise ValueError('Node {} does not exist'.format(self.data['nodeId']))
+        try:
+            node, _ = capacity.api.GetCapacity(self.data['nodeId'])
+        except HTTPError as err:
+            if err.response.status_code == 404:
+                raise ValueError('Node {} does not exist'.format(self.data['nodeId']))
+            raise err
 
-        j.clients.zrobot.get(self.data['nodeId'], data={'url': nodes[0].robot_address})
+        j.clients.zrobot.get(self.data['nodeId'], data={'url': node.robot_address})
         self._robot_api = j.clients.zrobot.robots[self.data['nodeId']]
         # self._node_api = j.clients.zrobot.robots['main']
 
