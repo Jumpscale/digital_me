@@ -90,7 +90,7 @@ class Vm(TemplateBase):
             'nics': [{
                 'id': self.data['zerotier']['id'],
                 'type': 'zerotier',
-                'ztClient': self.data['zerotier']['ztClient'],
+                'ztClient': self.guid,
                 'name': 'zerotier_nic',
             },
                 {'name': 'test',
@@ -139,7 +139,7 @@ class Vm(TemplateBase):
         info = self._node_vm.schedule_action('info', args={'timeout': timeout}).wait(die=True).result
         nics = info.pop('nics')
         nic = nics[0]
-        info['zerotier'] = {'id': nic['id'], 
+        info['zerotier'] = {'id': nic['id'],
                             'ztClient': nic['ztClient'],
                             'ip': nic.get('ip')}
         return info
