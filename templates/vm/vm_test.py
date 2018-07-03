@@ -112,8 +112,8 @@ class TestVmTemplate(ZrobotBaseTest):
         create = self.vm._node_api.services.find_or_create
         create.return_value.name = vdisk_name
         self.vm.install()
-        zt_client.schedule_action.assert_called_once_with('token')
-        assert self.vm._node_api.services.find_or_create.call_count == 3
+        zt_client.schedule_action.assert_called_once_with('add_to_robot', args={'serviceguid': self.vm.guid, 'url': 'url'})
+        assert self.vm._node_api.services.find_or_create.call_count == 2
 
         disks = [{
             'name': vdisk_name,
@@ -141,8 +141,7 @@ class TestVmTemplate(ZrobotBaseTest):
         }
         vdisk_create = call(VDISK_TEMPLATE_UID, '_'.join([self.vm.guid, disk['label']]), data=disk)
         vm_create = call(VM_TEMPLATE_UID, self.vm.guid, data=vm_data)
-        zt_create = call(ZT_TEMPLATE_UID, self.valid_data['zerotier']['ztClient'], {'token': 'token'})
-        create.assert_has_calls([zt_create, vdisk_create,  vm_create], any_order=True)
+        create.assert_has_calls([vdisk_create,  vm_create], any_order=True)
         self.vm.state.check('actions', 'install', 'ok')
         self.vm.state.check('status', 'running', 'ok')
 
@@ -151,6 +150,7 @@ class TestVmTemplate(ZrobotBaseTest):
         Test successfully destroying the vm
         """
         self.vm.state.set('actions', 'install', 'ok')
+        self.vm.api = MagicMock()
         self.vm.uninstall()
 
         self.vm._node_vm.schedule_action.assert_called_with('uninstall')

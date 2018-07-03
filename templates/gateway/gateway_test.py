@@ -57,12 +57,10 @@ class TestGatewayTemplate(ZrobotBaseTest):
             key = urlparse(url).netloc
             kwargs[key] = self.publibcrobotapi
         j.clients.zrobot.robots = kwargs
-
-        if mock_capacity:
-            capacity = MagicMock()
-            self.mocknodes = MagicMock(robot_address='url')
-            capacity.api.GetCapacity.return_value = (self.mocknodes, None)
-            j.clients.grid_capacity.get.return_value = capacity
+        capacity = MagicMock()
+        self.mocknode = MagicMock(robot_address='url')
+        capacity.api.GetCapacity.return_value = (self.mocknode, None)
+        j.clients.grid_capacity.get.return_value = capacity
 
         # public gateay info
         self.public_gateway_info = {'httpproxies': [], 'zerotierId': 'abcdef1234567890'}
@@ -94,9 +92,14 @@ class TestGatewayTemplate(ZrobotBaseTest):
     def test_create_invalid_data(self):
         data = copy.deepcopy(self.valid_data)
         data['nodeId'] = '112233445566'
-        self._mock_service(data, mock_capacity=False)
+        self._mock_service(data)
 
-        with pytest.raises(ValueError, message='Node should not be found'):
+        capacity = MagicMock()
+        capacity.api.GetCapacity.side_effect = RuntimeError()
+        j.clients.grid_capacity.get.return_value = capacity
+
+        self.mocknode.clear()
+        with pytest.raises(RuntimeError, message='Node should not be found'):
             self.service.validate()
 
     def test_get_info(self):

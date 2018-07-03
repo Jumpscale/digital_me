@@ -70,7 +70,7 @@ class S3(TemplateBase):
             if next_index == index:
                 raise RuntimeError('Looped all nodes and could not find a suitable node')
             final_index = next_index
-        
+
     def install(self):
 
         # Calculate how many zerodbs are needed for the s3
@@ -116,6 +116,7 @@ class S3(TemplateBase):
             }],
             'nodeId': self._nodes[0]['node_id'],
         }
+
         vm = self.api.services.create(VM_TEMPLATE_UID, self.guid, vm_data)
         vm.schedule_action('install').wait(die=True)
         vminfo = vm.schedule_action('info', args={'timeout': 600}).wait(die=True).result

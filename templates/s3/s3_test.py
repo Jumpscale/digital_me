@@ -80,7 +80,7 @@ class TestS3Template(ZrobotBaseTest):
 
     def test_create_namespace_no_suitable_nodes_with_available_namespace(self):
         with pytest.raises(RuntimeError, message='template should fail if there is no suitable node found'):
-            self.s3._nodes = [{'sru': 20, 'node_id':'node_id', 'robot_address':'robot_address'}]
+            self.s3._nodes = [{'sru': 20, 'node_id': 'node_id', 'robot_address': 'robot_address'}]
             self.s3._get_zrobot = MagicMock()
             namespace = self.s3._get_zrobot.return_value.services.create.return_value
             namespace.schedule_action.return_value.wait.return_value.eco = MagicMock(exceptionclassname='NoNamespaceAvailability')
@@ -95,16 +95,16 @@ class TestS3Template(ZrobotBaseTest):
             self.s3._get_zrobot.return_value.services.create.return_value.delete.assert_not_called()
 
     def test_create_namespace(self):
-            self.s3._nodes = [{'sru': 20, 'node_id': 'node_id', 'robot_address': 'robot_address'}]
-            self.s3._get_zrobot = MagicMock()
-            namespace = self.s3._get_zrobot.return_value.services.create.return_value
-            namespace.schedule_action.return_value.wait.return_value.eco = None
-            namespace.name = 'name'
-            ns, index = self.s3._create_namespace(0, 'sru', 'password')
-            assert ns == namespace
-            assert index == 0
-            assert self.s3._nodes[0]['sru'] == 10
-            assert self.s3.data['namespaces'] == [{'name': 'name', 'url': 'robot_address', 'node': 'node_id'}]
+        self.s3._nodes = [{'sru': 20, 'node_id': 'node_id', 'robot_address': 'robot_address'}]
+        self.s3._get_zrobot = MagicMock()
+        namespace = self.s3._get_zrobot.return_value.services.create.return_value
+        namespace.schedule_action.return_value.wait.return_value.eco = None
+        namespace.name = 'name'
+        ns, index = self.s3._create_namespace(0, 'sru', 'password')
+        assert ns == namespace
+        assert index == 0
+        assert self.s3._nodes[0]['sru'] == 10
+        assert self.s3.data['namespaces'] == [{'name': 'name', 'url': 'robot_address', 'node': 'node_id'}]
 
     def test_install_failed_to_find_vm(self):
         with pytest.raises(RuntimeError, message='template should fail if it fails to find vm in zt network'):
@@ -113,10 +113,10 @@ class TestS3Template(ZrobotBaseTest):
             namespace = MagicMock()
             namespace.schedule_action.return_value.wait.return_value.result = {'ip': '127.0.0.01', 'port': 9000}
             self.s3._create_namespace.return_value = (namespace, 0)
-            self.s3.api.services.create = MagicMock()
-            zt_client = MagicMock()
-            zt_client.network_get.return_value.member_get.side_effect = RuntimeError('Cannot find a member that match the provided filters')
-            patch('js9.j.clients.zerotier.get.return_value', zt_client).start()
+            vm = MagicMock()
+            vm.schedule_action.return_value.wait.return_value.result = {'zerotier': {}}
+            self.s3.api.services.create = MagicMock(return_value=vm)
+
             self.s3.install()
 
     def test_install_no_ip_assignments(self):
@@ -127,11 +127,8 @@ class TestS3Template(ZrobotBaseTest):
             namespace.schedule_action.return_value.wait.return_value.result = {'ip': '127.0.0.01', 'port': 9000}
             self.s3._create_namespace.return_value = (namespace, 0)
             vm = MagicMock()
-            vm.schedule_action.return_value.wait.return_value.result = 'id:'
+            vm.schedule_action.return_value.wait.return_value.result = {'zerotier': {'ip': ''}}
             self.s3.api.services.create = MagicMock(return_value=vm)
-            zt_client = MagicMock()
-            zt_client.network_get.return_value.member_get.return_value.private_ip = None
-            patch('js9.j.clients.zerotier.get.return_value', zt_client).start()
             patch('time.time', MagicMock(side_effect=[1, 2, 3, 700])).start()
             self.s3.install()
 
@@ -143,11 +140,8 @@ class TestS3Template(ZrobotBaseTest):
             namespace.schedule_action.return_value.wait.return_value.result = {'ip': '127.0.0.01', 'port': 9000}
             self.s3._create_namespace.return_value = (namespace, 0)
             vm = MagicMock()
-            vm.schedule_action.return_value.wait.return_value.result = 'id:'
+            vm.schedule_action.return_value.wait.return_value.result = {'zerotier': {'ip': '127.0.0.1'}}
             self.s3.api.services.create = MagicMock(return_value=vm)
-            zt_client = MagicMock()
-            zt_client.network_get.return_value.member_get.return_value.private_ip = 'ip'
-            patch('js9.j.clients.zerotier.get.return_value', zt_client).start()
             patch('time.time', MagicMock(side_effect=[1, 2, 1, 2, 1300])).start()
             patch('time.sleep', MagicMock()).start()
             vm_robot = MagicMock()
@@ -162,11 +156,8 @@ class TestS3Template(ZrobotBaseTest):
         namespace.schedule_action.return_value.wait.return_value.result = {'ip': '127.0.0.01', 'port': 9000}
         self.s3._create_namespace.return_value = (namespace, 0)
         vm = MagicMock()
-        vm.schedule_action.return_value.wait.return_value.result = 'id:'
+        vm.schedule_action.return_value.wait.return_value.result = {'zerotier': {'ip': 'ip'}}
         self.s3.api.services.create = MagicMock(return_value=vm)
-        zt_client = MagicMock()
-        zt_client.network_get.return_value.member_get.return_value.private_ip = 'ip'
-        patch('js9.j.clients.zerotier.get.return_value', zt_client).start()
         minio = MagicMock()
         minio.schedule_action.return_value.wait.return_value.result = 9001
         vm_robot = MagicMock()
