@@ -18,9 +18,11 @@ class Vm(TemplateBase):
 
     def __init__(self, name, guid=None, data=None):
         super().__init__(name=name, guid=guid, data=data)
+        self.add_delete_callback(self.uninstall)
 
         self.recurring_action('_monitor', 30)  # every 30 seconds
         self._node_api = None
+        self._node_robot_url = None
 
     def validate(self):
         if not self.data['nodeId']:
@@ -36,6 +38,7 @@ class Vm(TemplateBase):
 
         j.clients.zrobot.get(self.data['nodeId'], data={'url': node.robot_address})
         self._node_api = j.clients.zrobot.robots[self.data['nodeId']]
+        self._node_robot_url = node.robot_address
 
         if self.data['image'].partition(':')[0] not in ['zero-os', 'ubuntu']:
             raise ValueError('Invalid image')
@@ -64,8 +67,8 @@ class Vm(TemplateBase):
 
         zt_name = self.data['zerotier']['ztClient']
         zt_client = self.api.services.get(name=zt_name, template_uid=ZT_TEMPLATE_UID)
-        token = zt_client.schedule_action('token').wait(die=True).result
-        self._node_api.services.find_or_create(ZT_TEMPLATE_UID, zt_name, {'token': token})
+        data = {'url': self._node_robot_url, 'serviceguid': self.guid}
+        zt_client.schedule_action('add_to_robot', args=data).wait(die=True)
 
         vm_disks = []
         for disk in self.data['disks']:
@@ -123,30 +126,22 @@ class Vm(TemplateBase):
 
     def uninstall(self):
         self.logger.info('Uninstalling vm %s' % self.name)
-        for disk in self.data['disks']:
-            try:
-                vdisk = self._node_api.services.get(name='_'.join([self.guid, disk['label']]))
-            except:
-                pass
-            else:
-                vdisk.schedule_action('uninstall').wait(die=True)
-                vdisk.delete()
-
-        try:
-            vm = self._node_vm
-        except:
-            pass
-        else:
-            vm.schedule_action('uninstall').wait(die=True)
-            vm.delete()
+        self._node_vm.schedule_action('uninstall').wait(die=True)
+        zt_name = self.data['zerotier']['ztClient']
+        zt_client = self.api.services.get(name=zt_name, template_uid=ZT_TEMPLATE_UID)
+        data = {'url': self._node_robot_url, 'serviceguid': self.guid}
+        zt_client.schedule_action('remove_from_robot', args=data).wait(die=True)
         self.state.delete('actions', 'install')
         self.state.delete('status', 'running')
 
-    def info(self):
+    def info(self, timeout=None):
         self.state.check('actions', 'install', 'ok')
-        info = self._node_vm.schedule_action('info').wait(die=True).result
+        info = self._node_vm.schedule_action('info', args={'timeout': timeout}).wait(die=True).result
         nics = info.pop('nics')
-        info['zerotier'] = {'id': nics[0]['id'], 'ztClient': nics[0]['ztClient']}
+        nic = nics[0]
+        info['zerotier'] = {'id': nic['id'], 
+                            'ztClient': nic['ztClient'],
+                            'ip': nic.get('ip')}
         return info
 
     def shutdown(self):

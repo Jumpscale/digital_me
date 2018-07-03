@@ -1,21 +1,23 @@
-from unittest.mock import MagicMock, patch
-from js9 import j
 import copy
 import os
-import pytest
-
-
-from gateway import Gateway, PUBLIC_GW_ROBOTS
+from unittest.mock import MagicMock, patch
 from urllib.parse import urlparse
 
+import pytest
+from requests import HTTPError
+
+from gateway import PUBLIC_GW_ROBOTS, Gateway
+from js9 import j
 from JumpScale9Zrobot.test.utils import ZrobotBaseTest
 
 PRIVATEZT = '1234567890123456'
 NODEID = 'aabbcceeff'
 
+
 class AlwaysTrue:
     def __eq__(self, other):
         return True
+
 
 class TestGatewayTemplate(ZrobotBaseTest):
 
@@ -38,7 +40,7 @@ class TestGatewayTemplate(ZrobotBaseTest):
     def tearDown(self):
         patch.stopall()
 
-    def _mock_service(self, data):
+    def _mock_service(self, data, mock_capacity=True):
         self.service = Gateway(name='service', data=data)
         self.robotapi = MagicMock()
         self.vmservice = MagicMock()
@@ -56,8 +58,8 @@ class TestGatewayTemplate(ZrobotBaseTest):
             kwargs[key] = self.publibcrobotapi
         j.clients.zrobot.robots = kwargs
         capacity = MagicMock()
-        self.mocknodes = [MagicMock(robot_address='url')]
-        capacity.api.ListCapacity.return_value = (self.mocknodes, )
+        self.mocknode = MagicMock(robot_address='url')
+        capacity.api.GetCapacity.return_value = (self.mocknode, None)
         j.clients.grid_capacity.get.return_value = capacity
 
         # public gateay info
@@ -66,18 +68,18 @@ class TestGatewayTemplate(ZrobotBaseTest):
 
         # gateway network
         self.gateway_info = {
-                'networks': [{
-                    'public': True,
-                    'config': {'cidr': '172.18.0.1/16'}
-                    }],
-                'portforwards': []
+            'networks': [{
+                'public': True,
+                'config': {'cidr': '172.18.0.1/16'}
+            }],
+            'portforwards': []
         }
 
         self.gateway.schedule_action.return_value.wait.return_value.result = self.gateway_info
         # vm info
         self.vmservice.schedule_action.return_value.wait.return_value.result = {
-                'zerotier': {'id': PRIVATEZT, 'ztClient': 'main', },
-                'ztIdentity': 'abcdef:423423'
+            'zerotier': {'id': PRIVATEZT, 'ztClient': 'main', },
+            'ztIdentity': 'abcdef:423423'
         }
 
     def test_create_valid_data(self):
@@ -87,13 +89,17 @@ class TestGatewayTemplate(ZrobotBaseTest):
         self.service.data.pop('publicGatewayRobot', None)
         assert self.service.data == self.valid_data
 
-
     def test_create_invalid_data(self):
         data = copy.deepcopy(self.valid_data)
         data['nodeId'] = '112233445566'
         self._mock_service(data)
-        self.mocknodes.clear()
-        with pytest.raises(ValueError, message='Node should not be found'):
+
+        capacity = MagicMock()
+        capacity.api.GetCapacity.side_effect = RuntimeError()
+        j.clients.grid_capacity.get.return_value = capacity
+
+        self.mocknode.clear()
+        with pytest.raises(RuntimeError, message='Node should not be found'):
             self.service.validate()
 
     def test_get_info(self):
@@ -129,7 +135,6 @@ class TestGatewayTemplate(ZrobotBaseTest):
         self.gateway.schedule_action.assert_any_call('add_portforward', args=AlwaysTrue())
         self.public_gateway.schedule_action.assert_any_call('add_portforward', args=AlwaysTrue())
 
-
     def list_name_contains(self, datalist, name):
         for item in datalist:
             if item['name'] == name:
@@ -163,6 +168,3 @@ class TestGatewayTemplate(ZrobotBaseTest):
         assert not self.list_name_contains(self.service.data['httpproxies'], 'myproxy')
         self.public_gateway.schedule_action.assert_any_call('remove_http_proxy', args={'name': 'myproxy'})
         self.gateway.schedule_action.assert_any_call('remove_portforward', args=AlwaysTrue())
-
-
-

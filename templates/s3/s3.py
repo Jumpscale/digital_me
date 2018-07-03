@@ -70,7 +70,7 @@ class S3(TemplateBase):
             if next_index == index:
                 raise RuntimeError('Looped all nodes and could not find a suitable node')
             final_index = next_index
-        
+
     def install(self):
 
         # Calculate how many zerodbs are needed for the s3
@@ -116,30 +116,11 @@ class S3(TemplateBase):
             }],
             'nodeId': self._nodes[0]['node_id'],
         }
+
         vm = self.api.services.create(VM_TEMPLATE_UID, self.guid, vm_data)
         vm.schedule_action('install').wait(die=True)
-        zt_identity = vm.schedule_action('zt_identity').wait(die=True).result
-        id = zt_identity.split(':', 1)[0]
-        zt_client = j.clients.zerotier.get(self.data['vmZerotier']['ztClient'])
-        network = zt_client.network_get(self.data['vmZerotier']['id'])
-
-        try:
-            member = network.member_get(address=id)
-        except RuntimeError as e:
-            if str(e) == 'Cannot find a member that match the provided filters':
-                raise RuntimeError('Failed to find vm in zerotier network')
-            else:
-                raise
-
-        # Wait for the vm to the zerotier and get the assigned ip to be used for the zrobot connection
-        ip = None
-        now = time.time()
-        while time.time() < now + 600:
-            try:
-                ip = member.private_ip
-                break
-            except ValueError:
-                continue
+        vminfo = vm.schedule_action('info', args={'timeout': 600}).wait(die=True).result
+        ip = vminfo['zerotier'].get('ip')
 
         if not ip:
             raise RuntimeError('VM has no ip assignments in zerotier network')
