@@ -1,6 +1,7 @@
 from js9 import j
 from zerorobot.template.base import TemplateBase
 from zerorobot.template.state import StateCheckError
+from zerorobot.template.decorator import timeout
 from requests import HTTPError
 
 VDISK_TEMPLATE_UID = 'github.com/zero-os/0-templates/vdisk/0.0.1'
@@ -54,12 +55,20 @@ class Vm(TemplateBase):
     def _monitor(self):
         self.logger.info('Monitor vm %s' % self.name)
         self.state.check('actions', 'install', 'ok')
-        state = self._node_vm.state
+
+        @timeout(10)
+        def update_state():
+            state = self._node_vm.state
+            try:
+                state.check('status', 'running', 'ok')
+                self.state.set('status', 'running', 'ok')
+                return
+            except StateCheckError:
+                self.state.delete('status', 'running')
+
         try:
-            state.check('status', 'running', 'ok')
-            self.state.set('status', 'running', 'ok')
-            return
-        except StateCheckError:
+            update_state()
+        except:
             self.state.delete('status', 'running')
 
     def install(self):
