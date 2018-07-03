@@ -7,10 +7,10 @@ struct Schema {
     parityShards @3: Int32; # 0-stor parity shards config
     storageType @4: StorageType; # s3 storage type
     storageSize @5: UInt16; # s3 storage size
-    namespaces @6: List(Namespace); # namespace services created for s3. This is set by the service.
+    namespaces @6: List(Namespace); # namespace services created for s3. This is set by the template.
     minioLogin @7: Text; # minio login
     minioPassword @8: Text; # minio password
-    minioUrl @9: Text; # url to access minio on. This is set by the service.
+    minioUrl @9: Text; # url to access minio on. This is set by the template.
 
     enum StorageType {
      hdd @0;

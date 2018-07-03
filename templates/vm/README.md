@@ -46,13 +46,14 @@ Config:
 - `uninstall`: destroys and deletes the service from 0-robot and the node.
 - `shutdown`: Sends signal to the VM to shutdown this requires the VM to handle acpi signals.
   - Takes optional parameter force (defaults to false) to force the VM to shutdown
-- `start`: starts a machine in shutdown state.
 - `pause`: pause the vm.
 - `resume`: resume the vm.
 - `reboot`: reboot the vm.
 - `reset`: reset the vm.
 - `enable_vnc`: if a vnc port is specified, it opens the port.
 - `disable_vnc`: if a vnc port is specified, it drops the port.
+- `zt_identity`: return the zt identity of the vm
+- `info`: return info about the vm
 
 ### Examples:
 #### DSL (api interface):

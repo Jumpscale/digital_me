@@ -6,11 +6,11 @@ struct Schema {
     memory @0: UInt16 = 128; # Amount of memory in MiB
     cpu @1: UInt16 = 1; # Number of virtual CPUs
     zerotier @2: Zerotier; # zerotier nic to attach to the vm
-    image @3: Text;
+    image @3: Text; # image name specifying if it is a `zero-os` or `ubuntu` image
     disks @4: List(Disk); # list of disks to attach to the vm
-    configs @5: List(Config); # list of config
+    configs @5: List(Config); # list of Config
     ztIdentity @6: Text; # VM zerotier ID
-    nodeId @7: Text;
+    nodeId @7: Text; # the node_id from the capacity registeration of the the node you want to deploy the vm on
 
    struct Config {
         path @0: Text;
