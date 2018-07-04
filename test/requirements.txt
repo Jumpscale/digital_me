@@ -1,0 +1,4 @@
+nose
+parameterized
+testconfig
+termcolor
