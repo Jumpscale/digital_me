@@ -7,7 +7,6 @@ import uuid, time
 import subprocess
 
 
-
 class BaseTest(unittest.TestCase):
     zerotier = ''
 
@@ -70,14 +69,7 @@ class BaseTest(unittest.TestCase):
         self.robot.services.create('github.com/zero-os/0-templates/zerotier_client/0.0.1', self.ztClient, data)
         return self.ztClient
 
-    def get_vm_zt_ip(self):
-        # This method works only if the ZT nw has only TWO members.
-        for member in self.zt_network.members_list():
-            if member.private_ip != self.host_ip:
-                return member.private_ip
-
     def execute_command(self, ip, cmd):
-        cmd = "lsblk"
         target = "ssh root@%s '%s'" % (ip, cmd)
         ssh = subprocess.Popen(target,
                                shell=True,
@@ -90,3 +82,13 @@ class BaseTest(unittest.TestCase):
 
     def generate_random_txt(self):
         return str(uuid.uuid4()).replace('-', '')[:10]
+
+    def get_zos_cliene(self, ip):
+        self.node_client = j.clients.zos.get('host', data={'host': ip})
+
+    def get_vm_info(self, vmservice):
+        return vmservice.schedule_action('info').wait(die=True)
+
+    def get_vm_zt_ip(self, vmservice):
+        info = self.get_vm_info(vmservice)
+        return info.result['zerotier']['ip']
