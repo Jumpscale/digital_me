@@ -131,7 +131,7 @@ class TestVmTemplate(ZrobotBaseTest):
             'nics': [{
                 'id': self.valid_data['zerotier']['id'],
                 'type': 'zerotier',
-                'ztClient': self.valid_data['zerotier']['ztClient'],
+                'ztClient': self.vm.guid,
                 'name': 'zerotier_nic',
             },
                 {'name': 'test',
