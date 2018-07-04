@@ -1,4 +1,5 @@
 from js9 import j
+from zerorobot.service_collection import ServiceNotFoundError
 from zerorobot.template.base import TemplateBase
 from zerorobot.template.state import StateCheckError
 from zerorobot.template.decorator import timeout
@@ -104,7 +105,7 @@ class Vm(TemplateBase):
             },
                 {'name': 'test',
                  'type': 'default'
-                 }]
+                }]
         }
 
         image, _, version = self.data['image'].partition(':')
@@ -135,11 +136,27 @@ class Vm(TemplateBase):
 
     def uninstall(self):
         self.logger.info('Uninstalling vm %s' % self.name)
-        self._node_vm.schedule_action('uninstall').wait(die=True)
-        zt_name = self.data['zerotier']['ztClient']
-        zt_client = self.api.services.get(name=zt_name, template_uid=ZT_TEMPLATE_UID)
-        data = {'url': self._node_robot_url, 'serviceguid': self.guid}
-        zt_client.schedule_action('remove_from_robot', args=data).wait(die=True)
+        try:
+            self._node_vm.schedule_action('uninstall').wait(die=True)
+        except ServiceNotFoundError:
+            pass
+
+        for disk in self.data['disks']:
+            try:
+                vdisk = self._node_api.services.get(
+                    template_uid=VDISK_TEMPLATE_UID, name='_'.join([self.guid, disk['label']]))
+                vdisk.schedule_action('uninstall').wait(die=True)
+            except ServiceNotFoundError:
+                pass
+
+        try:
+            zt_name = self.data['zerotier']['ztClient']
+            zt_client = self.api.services.get(name=zt_name, template_uid=ZT_TEMPLATE_UID)
+            data = {'url': self._node_robot_url, 'serviceguid': self.guid}
+            zt_client.schedule_action('remove_from_robot', args=data).wait(die=True)
+        except ServiceNotFoundError:
+            pass
+
         self.state.delete('actions', 'install')
         self.state.delete('status', 'running')
 
