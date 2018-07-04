@@ -1,14 +1,13 @@
 @0xbe3b7b68c86b357e;
 
 struct Schema {
-    status @0 :Status;
-    hostname @1 :Text;
-    networks @2 :List(Network); # Configuration of the attached nics to the container
-    portforwards @3 :List(PortForward);
-    httpproxies @4 :List(HTTPProxy);
-    domain @5: Text;
-    nodeId @6: Text;
-    publicGatewayRobot @7: Text;
+    hostname @0 :Text;
+    networks @1 :List(Network); # Configuration of the attached nics to the container
+    portforwards @2 :List(PortForward);
+    httpproxies @3 :List(HTTPProxy);
+    domain @4: Text;
+    nodeId @5: Text;
+    publicGatewayRobot @6: Text;
 
     struct Network {
         type @0: NetworkType;
@@ -59,11 +58,6 @@ struct Schema {
     struct HTTPDestination {
         vm @0: Text;
         port @1: Int32;
-    }
-
-    enum Status{
-        halted @0;
-        running @1;
     }
 
     enum IPProtocol{

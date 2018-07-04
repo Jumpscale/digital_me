@@ -40,7 +40,7 @@ Namespace:
 ```python
 data = {
     'farmerIyoOrg': 'sarah',
-    'vmZerotier': [{'id':'9f77fc393e820576', 'ztClient': 'main'}],
+    'vmZerotier': {'id':'9f77fc393e820576', 'ztClient': 'main'},
     'storageType': 'hdd',
     'storageSize': 10,
     'minioLogin': 'login',

@@ -9,11 +9,11 @@ It abstracts all the logic required to create public forwards and http(s) proxie
 
 - `hostname`: Container hostname.
 - `domain`: Domain for the private networks
-- `nodeId`: Node ID that will be lookedup at capacity.threefoldtoken.com to connect to deploy private gateway
-- `publicGatewayRobot`: Instance of the noderobot to connecto deploy public gateway service (will be picked automaticly)
+- `nodeId`: Node ID that will be looked up at capacity.threefoldtoken.com to connect to deploy private gateway
+- `publicGatewayRobot`: Instance of the node robot to connect to deploy public gateway service (will be picked automatically)
 - `portforwards`: list of Portforward tcp/udp forwards from public network to private network
 - `httpproxies`: list of HTTPProxy. Reverse http/https proxy to allow one public ip to host multiple http services
-- `networks`: Private networks to connect to, (public will be automaticly connected to a public gateway)
+- `networks`: Private networks to connect to, (public will be automatically connected to a public gateway)
 
 Network:
 - `type`: value from enum NetworkType indicating the network type. 
@@ -21,14 +21,11 @@ Network:
 - `config`: a dict of NetworkConfig.
 - `name`: network's name.
 - `ztClient`: reference to zerotier client to authorize this node into the zerotier network
-- `hwaddr`: hardware address.
 - `dhcpserver`: Config for dhcp entries to be services for this network.
 
 NetworkConfig:
-- `dhcp`: boolean indicating to use dhcp or not.
 - `cidr`: cidr for this network.
 - `gateway`: gateway address
-- `dns`: list of dns
 
 NetworkType enum:
 - `default`
@@ -36,10 +33,13 @@ NetworkType enum:
 - `vlan`
 - `vxlan`
 - `bridge`
+- `passthrough`
 
-DHCPServer:
+DHCP:
 - `nameservers`: IPAddresses of upstream dns servers
 - `hosts`: Host entries to provided leases for
+- `poolStart`
+- `poolSize`
 
 Host:
 - `hostname`: Hostname to pass to lease info
@@ -86,7 +86,8 @@ HTTPDestination:
 - `remove_http_porxy`: Removes a httpproxy from the http server
 - `add_network`: Adds a network to the gateway
 - `remove_network`: Remove a network from the gateway
-- `info`: Retreive information about your gateway
+- `info`: Retrieve information about your gateway
+- `uninstall`: stop the gateway and clean up everything. **This action will delete your data.**
 
 
 ### Examples:
@@ -95,14 +96,14 @@ HTTPDestination:
 
 ```python
 # create dm gw
-DM_GW_UID = 'github.com/jumpscale/digital_me/gateway/0.0.1'                                            
+DM_GW_UID = 'github.com/jumpscale/digital_me/gateway/0.0.1'
 MPYPRIVATE = 'e4da7455b2c4c429'
 
 api = j.clients.zrobot.robots['main']
 data = {
     'hostname': 'mygw',
     'domain': 'lan',
-    'nodeRobot': 'main',
+    'nodeId': '544546f60261',
     'networks': [{
         'name': 'private',
         'type': 'zerotier',
@@ -110,13 +111,14 @@ data = {
         'id': MPYPRIVATE,
         'ztClient': 'work'
     }],
-}                                                                                           
-dmgw = api.services.find_or_create(DM_GW_UID, service_name='dm_gw', data=data)         
+}
+
+dmgw = api.services.find_or_create(DM_GW_UID, service_name='dm_gw', data=data)
 # install
 dmgw.schedule_action('install').wait(die=True)
 
 # add proxy
-proxy = {'name': 'myproxy', 'host': '192.168.59.200', 'types': ['http'], 'destinations': [{'vm': 'dmvm', 'port': 8080}]}
+proxy = {'name': 'myproxy', 'host': '192.168.59.200', 'types': ['http'], 'destinations': [{'vm': 'my_vm', 'port': 8080}]}
 dmgw.schedule_action('add_http_proxy', args={'proxy': proxy}).wait(die=True) 
 
 # remove it again
