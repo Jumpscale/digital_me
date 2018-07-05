@@ -27,7 +27,8 @@ class BaseTest(unittest.TestCase):
         self.zerotier = BaseTest.zerotier
 
     def tearDown(self):
-        pass
+        print(colored(' [*] Remove the VM ', 'white'))
+        self.vmservice.schedule_action('uninstall').wait(die=True)
 
     def create_zerotier_nw(self):
         print(colored(' [*] Create zerotier network.', 'white'))
