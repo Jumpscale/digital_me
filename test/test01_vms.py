@@ -6,6 +6,12 @@ from termcolor import colored
 
 class VMTestCases(BaseTest):
 
+
+    def setUp(self):
+        super().setUp()
+        self.vmtemplate = 'github.com/jumpscale/digital_me/vm/0.0.1'
+        self.service_name = self.generate_random_txt()
+
     @parameterized.expand(['ubuntu', 'zero-os'])
     def test001_create_vm(self, operting_system):
         data = {
@@ -17,9 +23,8 @@ class VMTestCases(BaseTest):
                          'content': self.ssh,
                          'name': 'sshkey'}]
         }
-        vmservice = self.robot.services.find_or_create('github.com/jumpscale/digital_me/vm/0.0.1', service_name='vm107',
-                                                       data=data)
-        vmservice.schedule_action('install').wait(die=True)
+        self.vmservice = self.robot.services.find_or_create(self.vmtemplate, service_name=self.service_name, data=data)
+        self.vmservice.schedule_action('install').wait(die=True)
 
     @parameterized.expand([(2048, 10, 'btrfs', 'hdd', 1), (2048, 10, 'btrfs', 'hdd', 2), (2048, 10, 'btrfs', 'hdd', 4),
                            (2048, 10, 'btrfs', 'hdd', 8), (2048, 10, 'btrfs', 'ssd', 1), (2048, 10, 'btrfs', 'ssd', 2),
@@ -89,7 +94,6 @@ class VMTestCases(BaseTest):
     def test002_create_vm_with_disk(self, memory, disk_size, disk_fs, disk_type, cpu):
         print(colored(' [*] Create an ubuntu machine with: %s %d %d %s %s') % (memory, disk_size, disk_fs,
                                                                                disk_type), 'white')
-        service_name = self.generate_random_txt()
         data = {
             'nodeId': self.nodeId,
             'disks': [{
@@ -108,8 +112,7 @@ class VMTestCases(BaseTest):
                          'name': 'sshkey'}]
         }
 
-        self.vmservice = self.robot.services.find_or_create('github.com/jumpscale/digital_me/vm/0.0.1',
-                                                            service_name=service_name, data=data)
+        self.vmservice = self.robot.services.find_or_create(self.vmtemplate, service_name=self.service_name, data=data)
         self.vmservice.schedule_action('install').wait(die=True)
         time.sleep(30)
         self.vm_ip = self.get_vm_zt_ip(self.vmservice)
@@ -184,4 +187,16 @@ class VMTestCases(BaseTest):
          #. Install a vm, assert its working well
          #, Disable vnc port, make sure u can't access it via vnc
          #, enable vnc port, make sure u can access it via vnc
+        """
+
+
+    def test009_reinstall_vm_with_many_disks(self):
+        """ DM-003
+         *Install a vm with many disks*
+
+         **Test Scenario:**
+
+         #. Install a vm with many disks, assert its working well
+         #. Uninstall it
+         #. Install it again
         """

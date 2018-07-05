@@ -9,7 +9,6 @@ import subprocess
 
 class BaseTest(unittest.TestCase):
     zerotier = ''
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.nodeId = config['main']['nodeId']
@@ -19,20 +18,16 @@ class BaseTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        # Create a zerotier for VMS
         # Create SSH key
         self = cls()
         self.create_zerotier_nw()
         self.host_join_zt()
-        j.clients.zerotier.get('zt_main', data={'token_': config['main']['ztoken']})
 
     def setUp(self):
-        self.create_zerotier_nw()
-        self.host_join_zt()
+        self.zerotier = BaseTest.zerotier
 
     def tearDown(self):
-        self.delete_zerotier_nw()
-        self.host_leave_zt()
+        pass
 
     def create_zerotier_nw(self):
         print(colored(' [*] Create zerotier network.', 'white'))
