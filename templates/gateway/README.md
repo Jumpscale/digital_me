@@ -117,10 +117,17 @@ dmgw = api.services.find_or_create(DM_GW_UID, service_name='dm_gw', data=data)
 # install
 dmgw.schedule_action('install').wait(die=True)
 
-# add proxy
-proxy = {'name': 'myproxy', 'host': '192.168.59.200', 'types': ['http'], 'destinations': [{'vm': 'my_vm', 'port': 8080}]}
-dmgw.schedule_action('add_http_proxy', args={'proxy': proxy}).wait(die=True) 
+# add proxy that will proxy traffic from my.domain.com to the port 8080 of the vm 'my_vm'
+proxy = {'name': 'myproxy', 'host': 'my.domain.com', 'types': ['http'], 'destinations': [{'vm': 'my_vm', 'port': 8080}]}
+dmgw.schedule_action('add_http_proxy', args={'proxy': proxy}).wait(die=True)
 
-# remove it again
-dmgw.schedule_action('remove_http_proxy', args={'proxy': proxy}).wait(die=True) 
+# add a port forward that will forward the port 9022 of the public IP of the gateway to the port 22 of the vm 'my_vm'
+forward = {'protocols':['tcp'],'srcport': 9022,'dstport':22,'vm':'my_vm','name':'my_vm_ssh'}
+dmgw.schedule_action('add_portforward',args={'forward':forward})
+
+# remove proxy
+dmgw.schedule_action('remove_http_proxy', args={'name': 'myproxy'}).wait(die=True) 
+
+# remove port forward
+dmgw.schedule_action('remove_portforward', args={'name': 'my_vm_ssh'}).wait(die=True) 
 ```
