@@ -1,4 +1,3 @@
-from selenium import webdriver
 from testconfig import config
 from termcolor import colored
 import unittest
@@ -9,6 +8,7 @@ import subprocess
 
 class BaseTest(unittest.TestCase):
     zerotier = ''
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.nodeId = config['main']['nodeId']
