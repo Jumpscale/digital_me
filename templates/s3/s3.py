@@ -6,6 +6,9 @@ import requests
 from js9 import j
 
 from zerorobot.template.base import TemplateBase
+from zerorobot.template.state import StateCheckError
+from zerorobot.template.decorator import timeout
+
 
 VM_TEMPLATE_UID = 'github.com/jumpscale/digital_me/vm/0.0.1'
 MINIO_TEMPLATE_UID = 'github.com/zero-os/0-templates/minio/0.0.1'
@@ -18,11 +21,45 @@ class S3(TemplateBase):
 
     def __init__(self, name=None, guid=None, data=None):
         super().__init__(name=name, guid=guid, data=data)
+        self.recurring_action('_monitor', 30)  # every 30 seconds
         self._nodes = []
+
+    def _monitor(self):
+        self.logger.info('Monitor s3 %s' % self.name)
+        self.state.check('actions', 'install', 'ok')
+
+        @timeout(10)
+        def update_state():
+            vm_robot, _ = self._vm_robot_and_ip()
+            state = vm_robot.services.get(template_uid=MINIO_TEMPLATE_UID, name=self.guid).state
+            try:
+                state.check('status', 'running', 'ok')
+                self.state.set('status', 'running', 'ok')
+                return
+            except StateCheckError:
+                self.state.delete('status', 'running')
+
+        try:
+            update_state()
+        except:
+            self.state.delete('status', 'running')
 
     def _get_zrobot(self, name, url):
         j.clients.zrobot.get(name, data={'url': url})
         return j.clients.zrobot.robots[name]
+
+    def _vm(self):
+        return self.api.services.get(template_uid=VM_TEMPLATE_UID, name=self.guid)
+
+    def _vm_robot_and_ip(self):
+        vm = self._vm()
+        vminfo = vm.schedule_action('info', args={'timeout': 600}).wait(die=True).result
+        ip = vminfo['zerotier'].get('ip')
+
+        if not ip:
+            raise RuntimeError('VM has no ip assignments in zerotier network')
+
+        return self._get_zrobot(vm.name, 'http://{}:6600'.format(ip)), ip
 
     def validate(self):
         if self.data['parityShards'] > self.data['dataShards']:
@@ -65,7 +102,7 @@ class S3(TemplateBase):
                 else:
                     best_node[storage_key] = best_node[storage_key] - self.data['storageSize']
                     self.data['namespaces'].append({'name': namespace.name, 'url': best_node['robot_address'], 'node': best_node['node_id']})
-                    return namespace, next_index
+                    return next_index
 
             if next_index == index:
                 raise RuntimeError('Looped all nodes and could not find a suitable node')
@@ -87,15 +124,13 @@ class S3(TemplateBase):
 
         storage_key = 'sru' if self.data['storageType'] == 'ssd' else 'hru'
         ns_password = j.data.idgenerator.generateXCharID(32)
-        zdbs_connection = list()
+        namespaces = list()
         self._nodes = sorted(self._nodes, key=lambda k: k[storage_key], reverse=True)
 
         # Create namespaces to be used as a backend for minio
         node_index = 0
         for i in range(zdb_count):
-            namespace, node_index = self._create_namespace(node_index, storage_key, ns_password)
-            result = namespace.schedule_action('connection_info').wait(die=True).result
-            zdbs_connection.append('{}:{}'.format(result['ip'], result['port']))
+            node_index = self._create_namespace(node_index, storage_key, ns_password)
 
         self._nodes = sorted(self._nodes, key=lambda k: k[storage_key], reverse=True)
 
@@ -119,17 +154,11 @@ class S3(TemplateBase):
 
         vm = self.api.services.create(VM_TEMPLATE_UID, self.guid, vm_data)
         vm.schedule_action('install').wait(die=True)
-        vminfo = vm.schedule_action('info', args={'timeout': 600}).wait(die=True).result
-        ip = vminfo['zerotier'].get('ip')
-
-        if not ip:
-            raise RuntimeError('VM has no ip assignments in zerotier network')
-
-        vm_robot = self._get_zrobot(vm.name, 'http://{}:6600'.format(ip))
+        vm_robot, ip = self._vm_robot_and_ip()
 
         # Create the minio service on the vm
         minio_data = {
-            'zerodbs': zdbs_connection,
+            'namespaces': [namespace['name'] for namespace in self.data['namespaces']],
             'namespace': self.guid,
             'nsSecret': ns_password,
             'login': self.data['minioLogin'],
@@ -160,16 +189,31 @@ class S3(TemplateBase):
         # uninstall and delete all the created namespaces
         for namespace in self.data['namespaces']:
             robot = self._get_zrobot(namespace['node'], namespace['url'])
-            # robot = self._get_zrobot('main', 'http://localhost:6600')
             ns = robot.services.get(template_uid=NS_TEMPLATE_UID, name=namespace['name'])
             ns.schedule_action('uninstall').wait(die=True)
             ns.delete()
             self.data['namespaces'].remove(namespace)
 
         # uninstall and delete the minio vm
-        vm = self.api.services.get(template_uid=VM_TEMPLATE_UID, name=self.guid)
+        vm = self._vm()
         vm.schedule_action('uninstall').wait(die=True)
         vm.delete()
 
     def url(self):
         return self.data['minioUrl']
+
+    def start(self):
+        self.state.check('actions', 'install', 'ok')
+        vm_robot, _ = self._vm_robot_and_ip()
+        minio = vm_robot.services.get(template_uid=MINIO_TEMPLATE_UID, name=self.guid)
+        minio.schedule_action('start').wait(die=True)
+
+    def stop(self):
+        self.state.check('actions', 'install', 'ok')
+        vm_robot, _ = self._vm_robot_and_ip()
+        minio = vm_robot.services.get(template_uid=MINIO_TEMPLATE_UID, name=self.guid)
+        minio.schedule_action('stop').wait(die=True)
+
+    def upgrade(self):
+        self.stop()
+        self.start()
