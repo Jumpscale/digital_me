@@ -105,7 +105,7 @@ class Vm(TemplateBase):
             },
                 {'name': 'test',
                  'type': 'default'
-                }]
+                 }]
         }
 
         image, _, version = self.data['image'].partition(':')
@@ -138,6 +138,7 @@ class Vm(TemplateBase):
         self.logger.info('Uninstalling vm %s' % self.name)
         try:
             self._node_vm.schedule_action('uninstall').wait(die=True)
+            self._node_vm.delete()
         except ServiceNotFoundError:
             pass
 
@@ -146,6 +147,7 @@ class Vm(TemplateBase):
                 vdisk = self._node_api.services.get(
                     template_uid=VDISK_TEMPLATE_UID, name='_'.join([self.guid, disk['label']]))
                 vdisk.schedule_action('uninstall').wait(die=True)
+                vdisk.delete()
             except ServiceNotFoundError:
                 pass
 
