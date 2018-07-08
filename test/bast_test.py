@@ -15,6 +15,7 @@ class BaseTest(unittest.TestCase):
         self.zt_token = config['main']['ztoken']
         self.ssh = config['main']['ssh']
         self.robot = j.clients.zrobot.robots['main']
+        self.zt_client_instance = "myZTClient"
 
     @classmethod
     def setUpClass(cls):
@@ -22,13 +23,19 @@ class BaseTest(unittest.TestCase):
         self = cls()
         self.create_zerotier_nw()
         self.host_join_zt()
+        self.create_ztClient_service()
+
+    @classmethod
+    def tearDownClass(cls):
+        self = cls()
+        self.zt_network = BaseTest.zerotier
+        self.host_leave_zt()
 
     def setUp(self):
-        self.zerotier = BaseTest.zerotier
+        self.zt_network = BaseTest.zerotier
 
     def tearDown(self):
-        print(colored(' [*] Remove the VM ', 'white'))
-        self.vmservice.schedule_action('uninstall').wait(die=True)
+        print(colored(' [*] Tear down', 'white'))
 
     def create_zerotier_nw(self):
         print(colored(' [*] Create zerotier network.', 'white'))
@@ -38,7 +45,7 @@ class BaseTest(unittest.TestCase):
         self.zt_network = self.zt_client.network_create(public=False, name=self.zt_name, auto_assign=True,
                                                         subnet='10.147.19.0/24')
         print(colored(' [*] ZT ID: {} '.format(self.zt_network.id), 'green'))
-        BaseTest.zerotier = self.zt_network.id
+        BaseTest.zerotier = self.zt_network
 
     def delete_zerotier_nw(self):
         print(colored(' [*] delete zt', 'white'))
@@ -58,12 +65,10 @@ class BaseTest(unittest.TestCase):
         j.tools.prefab.local.network.zerotier.network_leave(self.zt_network.id)
 
     def create_ztClient_service(self):
-        self.ztClient = self.generate_random_txt()
         data = {
             'token': self.zt_token,
         }
-        self.robot.services.create('github.com/zero-os/0-templates/zerotier_client/0.0.1', self.ztClient, data)
-        return self.ztClient
+        self.robot.services.find_or_create('github.com/zero-os/0-templates/zerotier_client/0.0.1', self.zt_client_instance, data)
 
     def execute_command(self, ip, cmd):
         target = "ssh root@%s '%s'" % (ip, cmd)

@@ -5,12 +5,14 @@ from termcolor import colored
 
 
 class VMTestCases(BaseTest):
-
-
     def setUp(self):
         super().setUp()
         self.vmtemplate = 'github.com/jumpscale/digital_me/vm/0.0.1'
         self.service_name = self.generate_random_txt()
+
+    def tearDown(self):
+        print(colored(' [*] Remove the VM ', 'white'))
+        self.vmservice.schedule_action('uninstall').wait(die=True)
 
     @parameterized.expand(['ubuntu', 'zero-os'])
     def test001_create_vm(self, operting_system):
@@ -18,7 +20,7 @@ class VMTestCases(BaseTest):
             'nodeId': self.nodeId,
             'image': operting_system,
             'memory': random.choice([1024, 2048, 4096]),
-            'zerotier': {'id': self.zt_network.id, 'ztClient': 'zt_main'},
+            'zerotier': {'id': self.zt_network.id, 'ztClient': self.zt_client_instance},
             'configs': [{'path': '/root/.ssh/authorized_keys',
                          'content': self.ssh,
                          'name': 'sshkey'}]
@@ -106,7 +108,7 @@ class VMTestCases(BaseTest):
             'image': 'ubuntu',
             'memory': memory,
             'cpu': cpu,
-            'zerotier': {'id': self.zt_network.id, 'ztClient': 'zt_main'},
+            'zerotier': {'id': self.zt_network.id, 'ztClient': self.zt_client_instance},
             'configs': [{'path': '/root/.ssh/authorized_keys',
                          'content': self.ssh,
                          'name': 'sshkey'}]
