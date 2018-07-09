@@ -11,7 +11,8 @@ class BaseTest(unittest.TestCase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.nodeId = config['main']['nodeId']
+        self.nodeId = config['main']['nodeid']
+        self.nodeIP = config['main']['nodeip']
         self.zt_token = config['main']['ztoken']
         self.ssh = config['main']['ssh']
         self.robot = j.clients.zrobot.robots['main']
@@ -33,6 +34,7 @@ class BaseTest(unittest.TestCase):
 
     def setUp(self):
         self.zt_network = BaseTest.zerotier
+        self.node_client = j.j.clients.zos.get('host', data={'host': self.nodeIP})
 
     def tearDown(self):
         print(colored(' [*] Tear down', 'white'))
@@ -52,7 +54,7 @@ class BaseTest(unittest.TestCase):
         self.zt_client.network_delete(self.zt_network.id)
 
     def host_join_zt(self):
-        print(colored(' [*] Host join zt network)', 'white'))
+        print(colored(' [*] Host join zt network', 'white'))
         j.tools.prefab.local.network.zerotier.network_join(network_id=self.zt_network.id)
         zt_machine_addr = j.tools.prefab.local.network.zerotier.get_zerotier_machine_address()
         time.sleep(60)
@@ -68,7 +70,8 @@ class BaseTest(unittest.TestCase):
         data = {
             'token': self.zt_token,
         }
-        self.robot.services.find_or_create('github.com/zero-os/0-templates/zerotier_client/0.0.1', self.zt_client_instance, data)
+        self.robot.services.create('github.com/zero-os/0-templates/zerotier_client/0.0.1', self.zt_client_instance,
+                                   data)
 
     def execute_command(self, ip, cmd):
         target = "ssh root@%s '%s'" % (ip, cmd)
@@ -93,3 +96,11 @@ class BaseTest(unittest.TestCase):
     def get_vm_zt_ip(self, vmservice):
         info = self.get_vm_info(vmservice)
         return info.result['zerotier']['ip']
+
+    def get_kvm_by_vnc(self, vnc_port):
+        kvms = self.node_client.kvm.list()
+        for kvm in kvms:
+            if vnc_port == kvm['vnc']:
+                return kvm
+            else:
+                return None

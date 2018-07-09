@@ -1,8 +1,7 @@
 from test.bast_test import BaseTest
 from parameterized import parameterized
-import random, uuid, time
+import random, uuid, time, traceback, logging
 from termcolor import colored
-
 
 class VMTestCases(BaseTest):
     def setUp(self):
@@ -16,6 +15,7 @@ class VMTestCases(BaseTest):
 
     @parameterized.expand(['ubuntu', 'zero-os'])
     def test001_create_vm(self, operting_system):
+        print(colored(' [*] Create VM with %s OS' % operting_system, 'white'))
         data = {
             'nodeId': self.nodeId,
             'image': operting_system,
@@ -26,7 +26,16 @@ class VMTestCases(BaseTest):
                          'name': 'sshkey'}]
         }
         self.vmservice = self.robot.services.find_or_create(self.vmtemplate, service_name=self.service_name, data=data)
-        self.vmservice.schedule_action('install').wait(die=True)
+        try:
+            self.vmservice.schedule_action('install').wait(die=True)
+        except Exception as e:
+            logging.error(traceback.format_exc())
+            return
+
+        print(colored(' [*] Get VM info', 'white'))
+        self.vm_info = self.get_vm_info(self.vmservice)
+        self.kvm = self.get_kvm_by_vnc(vnc_port=self.vm_info['vnc'])
+        self.assertIn(operting_system, self.kvm['params']['flist'])
 
     @parameterized.expand([(2048, 10, 'btrfs', 'hdd', 1), (2048, 10, 'btrfs', 'hdd', 2), (2048, 10, 'btrfs', 'hdd', 4),
                            (2048, 10, 'btrfs', 'hdd', 8), (2048, 10, 'btrfs', 'ssd', 1), (2048, 10, 'btrfs', 'ssd', 2),
@@ -94,8 +103,8 @@ class VMTestCases(BaseTest):
                            (8192, 20, 'ext2', 'ssd', 2), (8192, 20, 'ext2', 'ssd', 4), (8192, 20, 'ext2', 'ssd', 8)]
                           )
     def test002_create_vm_with_disk(self, memory, disk_size, disk_fs, disk_type, cpu):
-        print(colored(' [*] Create an ubuntu machine with: %s %d %d %s %s') % (memory, disk_size, disk_fs,
-                                                                               disk_type), 'white')
+        print(colored(' [*] Create an ubuntu machine with: {} {} {} {} {}'.format(memory, disk_size, disk_fs, disk_type, cpu),
+                      'white'))
         data = {
             'nodeId': self.nodeId,
             'disks': [{
@@ -115,9 +124,20 @@ class VMTestCases(BaseTest):
         }
 
         self.vmservice = self.robot.services.find_or_create(self.vmtemplate, service_name=self.service_name, data=data)
-        self.vmservice.schedule_action('install').wait(die=True)
-        time.sleep(30)
-        self.vm_ip = self.get_vm_zt_ip(self.vmservice)
+        try:
+            self.vmservice.schedule_action('install').wait(die=True)
+        except Exception as e:
+            logging.error(traceback.format_exc())
+            return
+
+        print(colored(' [*] Get VM info', 'white'))
+        self.vm_info = self.get_vm_info(self.vmservice)
+        self.kvm = self.get_kvm_by_vnc(vnc_port=self.vm_info['vnc'])
+        self.assertEqual(memory, self.kvm['params']['memory'])
+        self.assertEqual(cpu, self.kvm['params']['cpu'])
+        self.assertEqual(len(data['disks']), len(self.kvm['params']['media']))
+        self.assertIn(str(disk_size+'G'), self.kvm['params']['media'][0]['url'])
+
 
     def test003_reinstall_vm(self):
         """ DM-003
@@ -190,7 +210,6 @@ class VMTestCases(BaseTest):
          #, Disable vnc port, make sure u can't access it via vnc
          #, enable vnc port, make sure u can access it via vnc
         """
-
 
     def test009_reinstall_vm_with_many_disks(self):
         """ DM-003
