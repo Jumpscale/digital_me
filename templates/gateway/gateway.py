@@ -69,7 +69,10 @@ class Gateway(TemplateBase):
                 zerotierservice = self.api.services.get(name=network['ztClient'])
                 data = {'url': self._robot_url, 'serviceguid': self.guid}
                 zerotierservice.schedule_action('add_to_robot', args=data).wait(die=True)
+                # set the name of the zerotier client to the name of the client created on the node robot
+                network['ztClient'] = self.guid
             network['public'] = False
+
         pgwservice = self._public_robot_api.services.find_or_create(PGW_UID, self.guid, {})
         pgwservice.schedule_action('install').wait(die=True)
         pginfo = pgwservice.schedule_action('info').wait(die=True).result
@@ -79,6 +82,7 @@ class Gateway(TemplateBase):
             'id': pginfo['zerotierId'],
             'public': True
         })
+
         gwservice = self._robot_api.services.find_or_create(GW_UID, self.guid, gwdata)
         gwservice.schedule_action('install').wait(die=True)
         self._update_portforwards(gwservice, pgwservice)
