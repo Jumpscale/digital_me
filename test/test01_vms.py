@@ -3,6 +3,7 @@ from parameterized import parameterized
 import random, uuid, time, traceback, logging
 from termcolor import colored
 
+
 class VMTestCases(BaseTest):
     def setUp(self):
         super().setUp()
@@ -12,6 +13,7 @@ class VMTestCases(BaseTest):
     def tearDown(self):
         print(colored(' [*] Remove the VM ', 'white'))
         self.vmservice.schedule_action('uninstall').wait(die=True)
+        print(colored(' [*] len(node_client.kvm.list()) = {}'.format(len(self.node_client.kvm.list())), 'white'))
 
     @parameterized.expand(['ubuntu', 'zero-os'])
     def test001_create_vm(self, operting_system):
@@ -25,8 +27,9 @@ class VMTestCases(BaseTest):
                          'content': self.ssh,
                          'name': 'sshkey'}]
         }
-        self.vmservice = self.robot.services.find_or_create(self.vmtemplate, service_name=self.service_name, data=data)
         try:
+            self.vmservice = self.robot.services.find_or_create(self.vmtemplate, service_name=self.service_name,
+                                                                data=data)
             self.vmservice.schedule_action('install').wait(die=True)
         except Exception as e:
             logging.error(traceback.format_exc())
@@ -34,7 +37,7 @@ class VMTestCases(BaseTest):
 
         print(colored(' [*] Get VM info', 'white'))
         self.vm_info = self.get_vm_info(self.vmservice)
-        self.kvm = self.get_kvm_by_vnc(vnc_port=self.vm_info['vnc'])
+        self.kvm = self.get_kvm_by_vnc(vnc_port=self.vm_info.result['vnc'])
         self.assertIn(operting_system, self.kvm['params']['flist'])
 
     @parameterized.expand([(2048, 10, 'btrfs', 'hdd', 1), (2048, 10, 'btrfs', 'hdd', 2), (2048, 10, 'btrfs', 'hdd', 4),
@@ -123,8 +126,9 @@ class VMTestCases(BaseTest):
                          'name': 'sshkey'}]
         }
 
-        self.vmservice = self.robot.services.find_or_create(self.vmtemplate, service_name=self.service_name, data=data)
         try:
+            self.vmservice = self.robot.services.find_or_create(self.vmtemplate, service_name=self.service_name,
+                                                                data=data)
             self.vmservice.schedule_action('install').wait(die=True)
         except Exception as e:
             logging.error(traceback.format_exc())
@@ -132,12 +136,11 @@ class VMTestCases(BaseTest):
 
         print(colored(' [*] Get VM info', 'white'))
         self.vm_info = self.get_vm_info(self.vmservice)
-        self.kvm = self.get_kvm_by_vnc(vnc_port=self.vm_info['vnc'])
+        self.kvm = self.get_kvm_by_vnc(vnc_port=self.vm_info.result['vnc'])
         self.assertEqual(memory, self.kvm['params']['memory'])
         self.assertEqual(cpu, self.kvm['params']['cpu'])
         self.assertEqual(len(data['disks']), len(self.kvm['params']['media']))
         self.assertIn(str(disk_size+'G'), self.kvm['params']['media'][0]['url'])
-
 
     def test003_reinstall_vm(self):
         """ DM-003

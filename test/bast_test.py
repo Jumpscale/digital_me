@@ -7,7 +7,8 @@ import subprocess
 
 
 class BaseTest(unittest.TestCase):
-    zerotier = ''
+    zerotier_nw = ''
+    zerotier_cl = ''
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -29,12 +30,15 @@ class BaseTest(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         self = cls()
-        self.zt_network = BaseTest.zerotier
+        self.zt_network = BaseTest.zerotier_nw
+        self.zt_client = BaseTest.zerotier_cl
         self.host_leave_zt()
+        self.delete_zerotier_nw()
 
     def setUp(self):
-        self.zt_network = BaseTest.zerotier
-        self.node_client = j.j.clients.zos.get('host', data={'host': self.nodeIP})
+        print('\n')
+        self.zt_network = BaseTest.zerotier_nw
+        self.node_client = j.clients.zos.get('host', data={'host': self.nodeIP})
 
     def tearDown(self):
         print(colored(' [*] Tear down', 'white'))
@@ -47,7 +51,8 @@ class BaseTest(unittest.TestCase):
         self.zt_network = self.zt_client.network_create(public=False, name=self.zt_name, auto_assign=True,
                                                         subnet='10.147.19.0/24')
         print(colored(' [*] ZT ID: {} '.format(self.zt_network.id), 'green'))
-        BaseTest.zerotier = self.zt_network
+        BaseTest.zerotier_cl = self.zt_client
+        BaseTest.zerotier_nw = self.zt_network
 
     def delete_zerotier_nw(self):
         print(colored(' [*] delete zt', 'white'))
@@ -64,6 +69,7 @@ class BaseTest(unittest.TestCase):
         print(colored(' [*] Host IP {}'.format(self.host_ip), 'green'))
 
     def host_leave_zt(self):
+        print(colored(' [*] Host leave zt network', 'white'))
         j.tools.prefab.local.network.zerotier.network_leave(self.zt_network.id)
 
     def create_ztClient_service(self):
