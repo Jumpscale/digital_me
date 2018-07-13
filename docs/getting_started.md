@@ -1,4 +1,4 @@
-# Getting started with Digital Me
+# Getting started with Digital Me Templates
 
 ## Setup
 
