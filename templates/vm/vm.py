@@ -168,7 +168,7 @@ class Vm(TemplateBase):
         nics = info.pop('nics')
         nic = nics[0]
         info['zerotier'] = {'id': nic['id'],
-                            'ztClient': nic['ztClient'],
+                            'ztClient': self.data.get('zerotier', {}).get('ztClient'),
                             'ip': nic.get('ip')}
         return info
 
