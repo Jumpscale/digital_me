@@ -92,7 +92,7 @@ class S3(TemplateBase):
         while True:
             next_index = final_index + 1 if final_index < len(self._nodes) - 2 else 0
             # if the current node candidate has enough storage, try to create a namespace on it
-            if self._nodes[final_index][storage_key] >= self.data['storageSize']:
+            if self._nodes[final_index]['total_resources'][storage_key] >= self.data['storageSize']:
                 best_node = self._nodes[final_index]
                 robot = self._get_zrobot(best_node['node_id'], best_node['robot_address'])
                 data = {
@@ -114,7 +114,7 @@ class S3(TemplateBase):
                     else:
                         raise RuntimeError(task.eco.errormessage)
                 else:
-                    best_node[storage_key] = best_node[storage_key] - self.data['storageSize']
+                    best_node['total_resources'][storage_key] = best_node['total_resources'][storage_key] - self.data['storageSize']
                     self.data['namespaces'].append(
                         {'name': namespace.name, 'url': best_node['robot_address'], 'node': best_node['node_id']})
                     return namespace, next_index
@@ -140,7 +140,7 @@ class S3(TemplateBase):
         storage_key = 'sru' if self.data['storageType'] == 'ssd' else 'hru'
         ns_password = j.data.idgenerator.generateXCharID(32)
         zdbs_connection = list()
-        self._nodes = sorted(self._nodes, key=lambda k: k[storage_key], reverse=True)
+        self._nodes = sorted(self._nodes, key=lambda k: k['total_resources'][storage_key], reverse=True)
 
         # Create namespaces to be used as a backend for minio
         node_index = 0
@@ -149,7 +149,7 @@ class S3(TemplateBase):
             result = namespace.schedule_action('connection_info').wait(die=True).result
             zdbs_connection.append('{}:{}'.format(result['ip'], result['port']))
 
-        self._nodes = sorted(self._nodes, key=lambda k: k[storage_key], reverse=True)
+        self._nodes = sorted(self._nodes, key=lambda k: k['total_resources'][storage_key], reverse=True)
 
         # Create the zero-os vm on which we will create the minio container
         vm_data = {
