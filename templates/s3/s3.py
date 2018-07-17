@@ -38,6 +38,20 @@ class S3(TemplateBase):
                 return
             except StateCheckError:
                 self.state.delete('status', 'running')
+                zdbs_connection = []
+                for namespace in self.data['namespaces']:
+                    robot = self._get_zrobot(namespace['node'], namespace['url'])
+                    ns = robot.services.get(template_uid=NS_TEMPLATE_UID, name=namespace['name'])
+                    try:
+                        ns.state.check('status', 'running', 'ok')
+                        result = ns.schedule_action('connection_info').wait(die=True).result
+                        zdbs_connection.append('{}:{}'.format(result['ip'], result['port']))
+                    except StateCheckError:
+                        break
+                else:
+                    minio = vm_robot.services.get(template_uid=MINIO_TEMPLATE_UID, name=self.guid)
+                    minio.schedule_action('update_zerodbs', args={'zerodbs': zdbs_connection}).wait(die=True)
+                    minio.state.set('zerodbs', 'started', 'ok')
 
         try:
             update_state()
@@ -101,8 +115,9 @@ class S3(TemplateBase):
                         raise RuntimeError(task.eco.errormessage)
                 else:
                     best_node[storage_key] = best_node[storage_key] - self.data['storageSize']
-                    self.data['namespaces'].append({'name': namespace.name, 'url': best_node['robot_address'], 'node': best_node['node_id']})
-                    return next_index
+                    self.data['namespaces'].append(
+                        {'name': namespace.name, 'url': best_node['robot_address'], 'node': best_node['node_id']})
+                    return namespace, next_index
 
             if next_index == index:
                 raise RuntimeError('Looped all nodes and could not find a suitable node')
@@ -124,13 +139,15 @@ class S3(TemplateBase):
 
         storage_key = 'sru' if self.data['storageType'] == 'ssd' else 'hru'
         ns_password = j.data.idgenerator.generateXCharID(32)
-        namespaces = list()
+        zdbs_connection = list()
         self._nodes = sorted(self._nodes, key=lambda k: k[storage_key], reverse=True)
 
         # Create namespaces to be used as a backend for minio
         node_index = 0
         for i in range(zdb_count):
-            node_index = self._create_namespace(node_index, storage_key, ns_password)
+            namespace, node_index = self._create_namespace(node_index, storage_key, ns_password)
+            result = namespace.schedule_action('connection_info').wait(die=True).result
+            zdbs_connection.append('{}:{}'.format(result['ip'], result['port']))
 
         self._nodes = sorted(self._nodes, key=lambda k: k[storage_key], reverse=True)
 
@@ -158,7 +175,7 @@ class S3(TemplateBase):
 
         # Create the minio service on the vm
         minio_data = {
-            'namespaces': [namespace['name'] for namespace in self.data['namespaces']],
+            'namespaces': zdbs_connection,
             'namespace': self.guid,
             'nsSecret': ns_password,
             'login': self.data['minioLogin'],
@@ -170,7 +187,9 @@ class S3(TemplateBase):
         minio = None
         while time.time() < now + 1200:
             try:
+                vm_robot.templates.checkout_repo(url='https://github.com/zero-os/0-templates', revision='s3-monitor')
                 minio = vm_robot.services.find_or_create(MINIO_TEMPLATE_UID, self.guid, minio_data)
+                minio.state.set('zerodbs', 'started', 'ok')
                 break
             except requests.ConnectionError:
                 time.sleep(10)
