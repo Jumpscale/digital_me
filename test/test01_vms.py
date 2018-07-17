@@ -30,9 +30,9 @@ class VMTestCases(BaseTest):
     def generate_random_vm_params(self):
         vm_parms = {'cpu': random.choice([1, 2, 4, 8]),
                     'memory': random.choice([1024, 2048, 4096]),
-                    'diskType': random.choice('hdd', 'ssd'),
-                    'size': random.choice(10, 20, 30),
-                    'filesystem': random.choice('ext4', 'ext3', 'ext2', 'btrfs')
+                    'diskType': random.choice(['hdd', 'ssd']),
+                    'size': random.choice([10, 20, 30]),
+                    'filesystem': random.choice(['ext4', 'ext3', 'ext2', 'btrfs'])
                     }
         return vm_parms
 
