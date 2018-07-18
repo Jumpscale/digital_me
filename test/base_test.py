@@ -9,13 +9,13 @@ import subprocess
 class BaseTest(unittest.TestCase):
     zerotier_nw = ''
     zerotier_cl = ''
+    ssh = ''
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.nodeId = config['main']['nodeid']
         self.nodeIP = config['main']['nodeip']
         self.zt_token = config['main']['ztoken']
-        self.ssh = config['main']['ssh']
         self.robot = j.clients.zrobot.robots['main']
         self.zt_client_instance = "myZTClient"
 
@@ -26,6 +26,7 @@ class BaseTest(unittest.TestCase):
         self.create_zerotier_nw()
         self.host_join_zt()
         self.create_ztClient_service()
+        BaseTest.ssh = self.load_ssh_key()
 
     @classmethod
     def tearDownClass(cls):
@@ -37,6 +38,7 @@ class BaseTest(unittest.TestCase):
 
     def setUp(self):
         print('\n')
+        self.ssh = BaseTest.ssh
         self.zt_network = BaseTest.zerotier_nw
         self.node_client = j.clients.zos.get('host', data={'host': self.nodeIP})
 
@@ -80,7 +82,7 @@ class BaseTest(unittest.TestCase):
                                    data)
 
     def execute_command(self, ip, cmd):
-        target = "ssh root@%s '%s'" % (ip, cmd)
+        target = """ssh -o "StrictHostKeyChecking no" root@%s '%s'""" % (ip, cmd)
         ssh = subprocess.Popen(target,
                                shell=True,
                                stdout=subprocess.PIPE,
@@ -90,10 +92,19 @@ class BaseTest(unittest.TestCase):
         error = ssh.stderr.readlines()
         return result, error
 
+    def load_ssh_key(self):
+        with open('/root/.ssh/id_rsa.pub', 'r') as file:
+            ssh = file.readline().replace('\n', '')
+        if not ssh:
+            cmd = 'mkdir /root/.ssh; ssh-keygen -t rsa -f /root/.ssh/id_rsa -q -P ""'
+            subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.load_ssh_key()
+        return ssh
+
     def generate_random_txt(self):
         return str(uuid.uuid4()).replace('-', '')[:10]
 
-    def get_zos_cliene(self, ip):
+    def get_zos_client(self, ip):
         self.node_client = j.clients.zos.get('host', data={'host': ip})
 
     def get_vm_info(self, vmservice):
@@ -110,4 +121,3 @@ class BaseTest(unittest.TestCase):
                 return kvm
             else:
                 return None
-
