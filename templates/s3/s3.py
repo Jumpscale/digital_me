@@ -97,9 +97,9 @@ class S3(TemplateBase):
                 robot = self._get_zrobot(best_node['node_id'], best_node['robot_address'])
                 data = {
                     'disktype': self.data['storageType'],
-                    'mode': 'user',
+                    'mode': 'direct',
                     'password': password,
-                    'public': True,
+                    'public': False,
                     'size': self.data['storageSize'],
                     'nsName': self.guid,
                 }
@@ -172,10 +172,11 @@ class S3(TemplateBase):
         vm = self.api.services.create(VM_TEMPLATE_UID, self.guid, vm_data)
         vm.schedule_action('install').wait(die=True)
         vm_robot, ip = self._vm_robot_and_ip()
+        vm_robot.templates.checkout_repo(url='https://github.com/zero-os/0-templates', revision='s3-monitor')
 
         # Create the minio service on the vm
         minio_data = {
-            'namespaces': zdbs_connection,
+            'zerodbs': zdbs_connection,
             'namespace': self.guid,
             'nsSecret': ns_password,
             'login': self.data['minioLogin'],
@@ -185,9 +186,8 @@ class S3(TemplateBase):
         # Wait 20 mins for zerorobot until it downloads the repos and starts accepting requests
         now = time.time()
         minio = None
-        while time.time() < now + 1200:
+        while time.time() < now + 2400:
             try:
-                vm_robot.templates.checkout_repo(url='https://github.com/zero-os/0-templates', revision='s3-monitor')
                 minio = vm_robot.services.find_or_create(MINIO_TEMPLATE_UID, self.guid, minio_data)
                 minio.state.set('zerodbs', 'started', 'ok')
                 break
