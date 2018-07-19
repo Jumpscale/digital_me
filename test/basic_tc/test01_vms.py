@@ -35,7 +35,10 @@ class VMTestCases(BaseTest):
             info = self.vmservice.schedule_action('info').wait(die=True)
             print(colored(' [*] Done!', 'green'))
             return info
-
+        elif action == 'pause':
+            print(colored(' [*] Get info ...', 'white'))
+            self.vmservice.schedule_action('pause').wait(die=True)
+            print(colored(' [*] Done!', 'green'))
 
     def generate_random_vm_params(self):
         vm_parms = {'cpu': random.choice([1, 2, 4, 8]),
@@ -49,6 +52,36 @@ class VMTestCases(BaseTest):
     def ssh_vm_execute_command(self, cmd):
         vm_ip = self.get_vm_zt_ip(vmservice=self.vmservice)
         return self.execute_command(ip=vm_ip, cmd=cmd)
+
+    def install_vm(self, operting_system):
+        self.vm_parms = self.generate_random_vm_params()
+        print(colored(
+            ' [*] Create an ubuntu machine with: {} {} {} {} {}'.format(self.vm_parms['memory'], self.vm_parms['cpu'],
+                                                                        self.vm_parms['filesystem'], self.vm_parms['diskType'],
+                                                                        self.vm_parms['size']), 'white'))
+        data = {
+            'nodeId': self.nodeId,
+            'disks': [{
+                'diskType': self.vm_parms['diskType'],
+                'size': self.vm_parms['size'],
+                'mountPoint': '/mnt',
+                'filesystem': self.vm_parms['filesystem'],
+                'label': str(uuid.uuid4()).replace('-', '')[:10],
+            }],
+            'image': operting_system,
+            'cpu': self.vm_parms['cpu'],
+            'memory': self.vm_parms['memory'],
+            'zerotier': {'id': self.zt_network.id, 'ztClient': self.zt_client_instance},
+            'configs': [{'path': '/root/.ssh/authorized_keys',
+                         'content': self.ssh,
+                         'name': 'sshkey'}]
+        }
+        print(colored(' [*] Install a vm, assert its working well', 'white'))
+        kvm_before = len(self.node_client.kvm.list())
+        self.vm_action(action='install', data=data)
+        kvm_after = len(self.node_client.kvm.list())
+        self.assertEqual(kvm_before+1, kvm_after)
+        print(colored(' [*] Done!', 'green'))
 
     @parameterized.expand(['ubuntu', 'zero-os'])
     def test001_create_vm(self, operting_system):
@@ -138,34 +171,8 @@ class VMTestCases(BaseTest):
         #. Install a vm, assert its working well
         #. remove the vm, assert it was deleted
         """
-        self.vm_parms = self.generate_random_vm_params()
-        print(colored(
-            ' [*] Create an ubuntu machine with: {} {} {} {} {}'.format(self.vm_parms['memory'], self.vm_parms['cpu'],
-                                                                        self.vm_parms['filesystem'], self.vm_parms['diskType'],
-                                                                        self.vm_parms['size']), 'white'))
-        data = {
-            'nodeId': self.nodeId,
-            'disks': [{
-                'diskType': self.vm_parms['diskType'],
-                'size': self.vm_parms['size'],
-                'mountPoint': '/mnt',
-                'filesystem': self.vm_parms['filesystem'],
-                'label': str(uuid.uuid4()).replace('-', '')[:10],
-            }],
-            'image': operting_system,
-            'cpu': self.vm_parms['cpu'],
-            'memory': self.vm_parms['memory'],
-            'zerotier': {'id': self.zt_network.id, 'ztClient': self.zt_client_instance},
-            'configs': [{'path': '/root/.ssh/authorized_keys',
-                         'content': self.ssh,
-                         'name': 'sshkey'}]
-        }
-        print(colored(' [*] Install a vm, assert its working well', 'white'))
         kvm_before = len(self.node_client.kvm.list())
-        self.vm_action(action='install', data=data)
-        kvm_after = len(self.node_client.kvm.list())
-        self.assertEqual(kvm_before+1, kvm_after)
-        print(colored(' [*] Done!', 'green'))
+        self.install_vm(operting_system)
 
         print(colored(' [*] Uninstall a vm, assert its working well', 'white'))
         self.vm_action(action='uninstall')
@@ -187,49 +194,27 @@ class VMTestCases(BaseTest):
          #. Install it again, It should working fine
          #. Assert the created file is there
          """
-        self.vm_parms = self.generate_random_vm_params()
-        print(colored(
-            ' [*] Create an ubuntu machine with: {} {} {} {} {}'.format(self.vm_parms['memory'], self.vm_parms['cpu'],
-                                                                        self.vm_parms['filesystem'], self.vm_parms['diskType'],
-                                                                        self.vm_parms['size']), 'white'))
-        data = {
-            'nodeId': self.nodeId,
-            'disks': [{
-                'diskType': self.vm_parms['diskType'],
-                'size': self.vm_parms['size'],
-                'mountPoint': '/mnt',
-                'filesystem': self.vm_parms['filesystem'],
-                'label': str(uuid.uuid4()).replace('-', '')[:10],
-            }],
-            'image': operting_system,
-            'cpu': self.vm_parms['cpu'],
-            'memory': self.vm_parms['memory'],
-            'zerotier': {'id': self.zt_network.id, 'ztClient': self.zt_client_instance},
-            'configs': [{'path': '/root/.ssh/authorized_keys',
-                         'content': self.ssh,
-                         'name': 'sshkey'}]
-        }
-        print(colored(' [*] Install a vm, assert its working well', 'white'))
-        self.vm_action(action='install', data=data)
+        self.install_vm(operting_system=operting_system)
 
         print(colored(' [*] Create a file in the mounted disk'), 'white')
         self.ssh_vm_execute_command(cmd='touch /mnt/text.txt')
 
         print(colored(' [*] Shutdown the vm, assert it was deleted', 'white'))
-        self.vm_action(action='shutdown', data=data)
+        self.vm_action(action='shutdown')
 
         print(colored(' [*] Get machine status, It should be halted', 'white'))
         self.vm_info = self.vm_action(action='info')
         self.assertEqual(self.vm_info.result['status'], 'halted')
 
         print(colored(' [*] Install it again, It should working fine', 'white'))
-        self.vm_action(action='install', data=data)
+        self.vmservice.schedule_action('install').wait(die=True)
 
         print(colored(" [*] Assert the created file is still existing", 'white'))
         result, error = self.ssh_vm_execute_command(cmd='ls /mnt')
         self.assertEqual(len(result), 2)
 
-    def test006_pause_resume_vm(self):
+    @parameterized.expand(['ubuntu', 'zero-os'])
+    def test006_pause_resume_vm(self, operting_system):
         """ DM-003
          *pause the vm*
 
@@ -240,6 +225,15 @@ class VMTestCases(BaseTest):
          #, You can't access the vm in case of its status is pause
          #. resume the vm, its state should be ok
          """
+        self.install_vm(operting_system)
+        self.vm_action(action='pause')
+        self.vm_info = self.vm_action(action='info')
+        self.assertEqual(self.vm_info.result['status'], 'pause')
+
+        print(colored(' [*] Resume the vm, its state should be ok', 'white'))
+        self.vmservice.schedule_action('install').wait(die=True)
+        self.vm_info = self.vm_action(action='info')
+        self.assertEqual(self.vm_info.result['status'], 'running')
 
     def test007_reboot_vm(self):
         """ DM-003
