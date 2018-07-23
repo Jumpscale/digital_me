@@ -7,11 +7,7 @@ import subprocess
 
 
 class BaseTest(unittest.TestCase):
-    node_info = {'ssd': 0,
-                 'hdd': 0,
-                 'core': 0,
-                 'memory': 0
-                 }
+    node_info = {'ssd': 0, 'hdd': 0, 'core': 0, 'memory': 0}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -23,12 +19,13 @@ class BaseTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        # Create SSH key
         self = cls()
         self.create_zerotier_nw()
         self.host_join_zt()
         self.create_ztClient_service()
         BaseTest.ssh = self.load_ssh_key()
+        BaseTest.node_client = j.clients.zos.get('host', data={'host': ip})
+        BaseTest.node_sal_client = j.client.zos.sal.get_node('host')
         self.get_zos_info()
 
     @classmethod
@@ -43,7 +40,8 @@ class BaseTest(unittest.TestCase):
         print('\n')
         self.ssh = BaseTest.ssh
         self.zt_network = BaseTest.zerotier_nw
-        self.get_zos_client(ip=self.nodeIP)
+        self.node_client = BaseTest.node_client
+        self.node_sal_client = BaseTest.node_sal_client
 
     def tearDown(self):
         print(colored(' [*] Tear down', 'white'))
@@ -67,8 +65,14 @@ class BaseTest(unittest.TestCase):
         print(colored(' [*] Host join zt network', 'white'))
         j.tools.prefab.local.network.zerotier.network_join(network_id=self.zt_network.id)
         zt_machine_addr = j.tools.prefab.local.network.zerotier.get_zerotier_machine_address()
-        time.sleep(60)
-        host_member = self.zt_network.member_get(address=zt_machine_addr)
+        for _ in range(20):
+            try:
+                host_member = self.zt_network.member_get(address=zt_machine_addr)
+                break
+            except:
+                time.sleep(10)
+        else:
+            host_member = self.zt_network.member_get(address=zt_machine_addr)
         host_member.authorize()
         self.host_ip = host_member.private_ip
         print(colored(' [*] Host IP {}'.format(self.host_ip), 'green'))
@@ -103,10 +107,6 @@ class BaseTest(unittest.TestCase):
     def generate_random_txt(self):
         return str(uuid.uuid4()).replace('-', '')[:10]
 
-    def get_zos_client(self, ip):
-        self.node_client = j.clients.zos.get('host', data={'host': ip})
-        self.node_sal_client = j.client.zos.sal.get_node('host')
-
     def get_vm_info(self, vmservice):
         return vmservice.schedule_action('info').wait(die=True)
 
@@ -124,8 +124,4 @@ class BaseTest(unittest.TestCase):
 
     def get_zos_info(self):
         info = self.node_sal_client.capacity.total_report()
-        BaseTest.node_info = {'ssd': info.SRU,
-                              'hdd': info.HRU,
-                              'core': info.CRU,
-                              'memory': info.MRU
-                              }
+        BaseTest.node_info = {'ssd': info.SRU, 'hdd': info.HRU, 'core': info.CRU, 'memory': info.MRU}
