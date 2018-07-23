@@ -7,9 +7,11 @@ import subprocess
 
 
 class BaseTest(unittest.TestCase):
-    zerotier_nw = ''
-    zerotier_cl = ''
-    ssh = ''
+    node_info = {'ssd': 0,
+                 'hdd': 0,
+                 'core': 0,
+                 'memory': 0
+                 }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -27,6 +29,7 @@ class BaseTest(unittest.TestCase):
         self.host_join_zt()
         self.create_ztClient_service()
         BaseTest.ssh = self.load_ssh_key()
+        self.get_zos_info()
 
     @classmethod
     def tearDownClass(cls):
@@ -40,7 +43,7 @@ class BaseTest(unittest.TestCase):
         print('\n')
         self.ssh = BaseTest.ssh
         self.zt_network = BaseTest.zerotier_nw
-        self.node_client = j.clients.zos.get('host', data={'host': self.nodeIP})
+        self.get_zos_client(ip=self.nodeIP)
 
     def tearDown(self):
         print(colored(' [*] Tear down', 'white'))
@@ -83,11 +86,7 @@ class BaseTest(unittest.TestCase):
 
     def execute_command(self, ip, cmd):
         target = """ssh -o "StrictHostKeyChecking no" root@%s '%s'""" % (ip, cmd)
-        ssh = subprocess.Popen(target,
-                               shell=True,
-                               stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE)
-
+        ssh = subprocess.Popen(target, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         result = ssh.stdout.readlines()
         error = ssh.stderr.readlines()
         return result, error
@@ -106,6 +105,7 @@ class BaseTest(unittest.TestCase):
 
     def get_zos_client(self, ip):
         self.node_client = j.clients.zos.get('host', data={'host': ip})
+        self.node_sal_client = j.client.zos.sal.get_node('host')
 
     def get_vm_info(self, vmservice):
         return vmservice.schedule_action('info').wait(die=True)
@@ -121,3 +121,11 @@ class BaseTest(unittest.TestCase):
                 return kvm
             else:
                 return None
+
+    def get_zos_info(self):
+        info = self.node_sal_client.capacity.total_report()
+        BaseTest.node_info = {'ssd': info.SRU,
+                              'hdd': info.HRU,
+                              'core': info.CRU,
+                              'memory': info.MRU
+                              }

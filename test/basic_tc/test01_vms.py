@@ -19,41 +19,40 @@ class VMTestCases(BaseTest):
 
     def vm_action(self, action, data={}):
         if action == 'install':
-            print(colored(' [*] Installing ...', 'white'))
             self.vmservice = self.robot.services.find_or_create(self.vmtemplate, service_name=self.service_name,
                                                                 data=data)
             self.vmservice.schedule_action('install').wait(die=True)
-            print(colored(' [*] Done!', 'green'))
         elif action == 'uninstall':
-            print(colored(' [*] Uninstalling ...', 'white'))
             self.vmservice.schedule_action('uninstall').wait(die=True)
-            print(colored(' [*] Done!', 'green'))
         elif action == 'shutdown':
-            print(colored(' [*] shutdown ...', 'white'))
             self.vmservice.schedule_action('shutdown').wait(die=True)
-            print(colored(' [*] Done!', 'green'))
         elif action == 'info':
-            print(colored(' [*] Get info ...', 'white'))
             info = self.vmservice.schedule_action('info').wait(die=True)
-            print(colored(' [*] Done!', 'green'))
             return info
         elif action == 'pause':
-            print(colored(' [*] Get info ...', 'white'))
             self.vmservice.schedule_action('pause').wait(die=True)
-            print(colored(' [*] Done!', 'green'))
 
     def generate_random_vm_params(self):
-        vm_parms = {'cpu': random.choice([1, 2, 4, 8]),
-                    'memory': random.choice([1024, 2048, 4096]),
-                    'diskType': random.choice(['hdd', 'ssd']),
-                    'size': random.choice([10, 20, 30]),
+        vm_parms = {'cpu': random.randint(1, BaseTest.node_info['core']),
+                    'memory': random.randint(1, BaseTest.node_info['memory']),
                     'filesystem': random.choice(['ext4', 'ext3', 'ext2', 'btrfs'])
                     }
+        if (BaseTest.node_info['hdd'] != 0) and (BaseTest.node_info['ssd'] != 0):
+            disk_type = random.choice(['hdd', 'ssd'])
+            disk_size = random.randint(1, BaseTest.node_info[disk_type])
+        elif BaseTest.node_info['hdd'] != 0:
+            disk_type = 'hdd'
+            disk_size = random.randint(1, BaseTest.node_info[disk_type])
+        else:
+            disk_type = 'ssd'
+            disk_size = random.randint(1, BaseTest.node_info[disk_type])
+        vm_parms['diskType'] = disk_type
+        vm_parms['size'] = disk_size
         return vm_parms
 
     def ssh_vm_execute_command(self, cmd):
-        vm_ip = self.get_vm_zt_ip(vmservice=self.vmservice)
-        return self.execute_command(ip=vm_ip, cmd=cmd)
+        self.vm_ip = self.get_vm_zt_ip(vmservice=self.vmservice)
+        return self.execute_command(ip=self.vm_ip, cmd=cmd)
 
     def install_vm(self, operating_system):
         self.vm_parms = self.generate_random_vm_params()
@@ -125,7 +124,8 @@ class VMTestCases(BaseTest):
         self.install_vm(operating_system='ubuntu')
 
         print(colored(' [*] Create a file in the mounted disk'), 'white')
-        self.ssh_vm_execute_command(cmd='touch /mnt/text.txt')
+        time.sleep(60)
+        res, err = self.ssh_vm_execute_command(cmd='touch /mnt/text.txt')
 
         print(colored(' [*] Uninstall a vm, assert its working well', 'white'))
         self.vm_action(action='uninstall')
@@ -141,7 +141,7 @@ class VMTestCases(BaseTest):
 
         print(colored(" [*] Assert the created file isn't there", 'white'))
         result, error = self.ssh_vm_execute_command(cmd='ls /mnt')
-        self.assertEqual(len(result), 1)
+        self.assertEqual(len(result), 0)
 
     @parameterized.expand(['ubuntu', 'zero-os'])
     def test004_delete_vm(self, operating_system):
