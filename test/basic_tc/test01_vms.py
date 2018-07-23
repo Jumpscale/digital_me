@@ -6,16 +6,17 @@ from termcolor import colored
 
 class VMTestCases(BaseTest):
     def setUp(self):
-        print(colored(' [*] SetUp .. ', 'yellow'))
+        print(colored('\n [*] SetUp .. ', 'yellow'))
         super().setUp()
         self.vmtemplate = 'github.com/jumpscale/digital_me/vm/0.0.1'
         self.service_name = self.generate_random_txt()
 
     def tearDown(self):
         print(colored(' [*] TearDown .. ', 'yellow'))
-        print(colored(' [*] Remove the VM ', 'white'))
-        self.vmservice.schedule_action('uninstall').wait(die=True)
-        print(colored(' [*] No. of VMs : {}'.format(len(self.node_client.kvm.list())), 'white'))
+        if 'vmservice' in self.__dict__:
+            print(colored(' [*] Remove the VM ', 'white'))
+            self.vmservice.schedule_action('uninstall').wait(die=True)
+            print(colored(' [*] No. of VMs : {}'.format(len(self.node_client.kvm.list())), 'white'))
 
     def vm_action(self, action, data={}):
         if action == 'install':
@@ -86,8 +87,7 @@ class VMTestCases(BaseTest):
 
     @parameterized.expand(['ubuntu', 'zero-os'])
     def test001_create_vm(self, operating_system):
-        """ DM-001
-        *Install a vm test case*
+        """ DM-001 Install a vm test case
 
         **Test Scenario:**
 
@@ -110,8 +110,7 @@ class VMTestCases(BaseTest):
         self.assertIn(operating_system, self.kvm['params']['flist'])
 
     def test003_reinstall_vm(self):
-        """ DM-002
-        *Re-install a vm test case*
+        """ DM-002 Re-install a vm test case
 
         **Test Scenario:**
 
@@ -145,8 +144,7 @@ class VMTestCases(BaseTest):
 
     @parameterized.expand(['ubuntu', 'zero-os'])
     def test004_delete_vm(self, operating_system):
-        """ DM-003
-        *Delete the vm*
+        """ DM-003 Delete the vm
 
         **Test Scenario:**
 
@@ -163,8 +161,7 @@ class VMTestCases(BaseTest):
 
     @parameterized.expand(['ubuntu', 'zero-os'])
     def test005_shutdown_vm(self, operating_system):
-        """ DM-004
-         *Shutdown the vm*
+        """ DM-004 Shutdown the vm
 
          **Test Scenario:**
 
@@ -196,8 +193,7 @@ class VMTestCases(BaseTest):
 
     @parameterized.expand(['ubuntu', 'zero-os'])
     def test006_pause_resume_vm(self, operating_system):
-        """ DM-005
-         *pause the vm*
+        """ DM-005 pause the vm
 
          **Test Scenario:**
 
@@ -212,7 +208,7 @@ class VMTestCases(BaseTest):
         self.assertEqual(self.vm_info.result['status'], 'paused')
 
         print(colored(' [*] Resume the vm, its state should be ok', 'white'))
-        self.vmservice.schedule_action('install').wait(die=True)
+        self.vmservice.schedule_action('resume').wait(die=True)
         self.vm_info = self.vm_action(action='info')
         self.assertEqual(self.vm_info.result['status'], 'running')
 
@@ -227,19 +223,22 @@ class VMTestCases(BaseTest):
          #, Reboot the vm, should succeed
          #. Check the created file, should be there
         """
+        self.install_vm(operating_system='ubuntu')
 
-    def test008_disable_enable_vnc(self):
-        """ DM-007
-         *Disable vnc port*
+        print(colored(' [*] Create a file in the mounted disk'), 'white')
+        time.sleep(60)
+        res, err = self.ssh_vm_execute_command(cmd='touch /mnt/text.txt')
 
-         **Test Scenario:**
+        print(colored(' [*] Reboot the vm, should succeed', 'white'))
+        self.vmservice.schedule_action('reboot').wait(die=True)
+        print(colored(' [*] Done!', 'green'))
 
-         #. Install a vm, assert its working well
-         #, Disable vnc port, make sure u can't access it via vnc
-         #, enable vnc port, make sure u can access it via vnc
-        """
+        print(colored(" [*] Assert the created file is there", 'white'))
+        result, error = self.ssh_vm_execute_command(cmd='ls /mnt')
+        self.assertEqual(len(result), 1)
 
-    def test009_reinstall_vm_with_many_disks(self):
+
+    def test008_reinstall_vm_with_many_disks(self):
         """ DM-008
 
          *Install a vm with many disks*

@@ -24,8 +24,8 @@ class BaseTest(unittest.TestCase):
         self.host_join_zt()
         self.create_ztClient_service()
         BaseTest.ssh = self.load_ssh_key()
-        BaseTest.node_client = j.clients.zos.get('host', data={'host': ip})
-        BaseTest.node_sal_client = j.client.zos.sal.get_node('host')
+        BaseTest.node_client = j.clients.zos.get('host', data={'host': config['main']['nodeip']})
+        BaseTest.node_sal_client = j.clients.zos.sal.get_node('host')
         self.get_zos_info()
 
     @classmethod
@@ -74,6 +74,7 @@ class BaseTest(unittest.TestCase):
         else:
             host_member = self.zt_network.member_get(address=zt_machine_addr)
         host_member.authorize()
+        time.sleep(30)
         self.host_ip = host_member.private_ip
         print(colored(' [*] Host IP {}'.format(self.host_ip), 'green'))
 
@@ -124,4 +125,5 @@ class BaseTest(unittest.TestCase):
 
     def get_zos_info(self):
         info = self.node_sal_client.capacity.total_report()
-        BaseTest.node_info = {'ssd': info.SRU, 'hdd': info.HRU, 'core': info.CRU, 'memory': info.MRU}
+        BaseTest.node_info = {'ssd': int(info.SRU), 'hdd': int(info.HRU), 'core': info.CRU,
+                              'memory': int(info.MRU)}
