@@ -6,14 +6,16 @@ from termcolor import colored
 
 class VMTestCases(BaseTest):
     def setUp(self):
+        print(colored(' [*] SetUp .. ', 'yellow'))
         super().setUp()
         self.vmtemplate = 'github.com/jumpscale/digital_me/vm/0.0.1'
         self.service_name = self.generate_random_txt()
 
     def tearDown(self):
+        print(colored(' [*] TearDown .. ', 'yellow'))
         print(colored(' [*] Remove the VM ', 'white'))
         self.vmservice.schedule_action('uninstall').wait(die=True)
-        print(colored(' [*] No. of VMs : ) {}'.format(len(self.node_client.kvm.list())), 'white'))
+        print(colored(' [*] No. of VMs : {}'.format(len(self.node_client.kvm.list())), 'white'))
 
     def vm_action(self, action, data={}):
         if action == 'install':
@@ -85,6 +87,13 @@ class VMTestCases(BaseTest):
 
     @parameterized.expand(['ubuntu', 'zero-os'])
     def test001_create_vm(self, operating_system):
+        """ DM-001
+        *Install a vm test case*
+
+        **Test Scenario:**
+
+        #. Install a vm, assert its working well
+        """
         print(colored(' [*] Create VM with %s OS' % operating_system, 'white'))
         data = {
             'nodeId': self.nodeId,
@@ -102,7 +111,7 @@ class VMTestCases(BaseTest):
         self.assertIn(operating_system, self.kvm['params']['flist'])
 
     def test003_reinstall_vm(self):
-        """ DM-003
+        """ DM-002
         *Re-install a vm test case*
 
         **Test Scenario:**
@@ -136,7 +145,7 @@ class VMTestCases(BaseTest):
 
     @parameterized.expand(['ubuntu', 'zero-os'])
     def test004_delete_vm(self, operating_system):
-        """ DM-004
+        """ DM-003
         *Delete the vm*
 
         **Test Scenario:**
@@ -154,7 +163,7 @@ class VMTestCases(BaseTest):
 
     @parameterized.expand(['ubuntu', 'zero-os'])
     def test005_shutdown_vm(self, operating_system):
-        """ DM-005
+        """ DM-004
          *Shutdown the vm*
 
          **Test Scenario:**
@@ -187,7 +196,7 @@ class VMTestCases(BaseTest):
 
     @parameterized.expand(['ubuntu', 'zero-os'])
     def test006_pause_resume_vm(self, operating_system):
-        """ DM-006
+        """ DM-005
          *pause the vm*
 
          **Test Scenario:**
@@ -200,7 +209,7 @@ class VMTestCases(BaseTest):
         self.install_vm(operating_system)
         self.vm_action(action='pause')
         self.vm_info = self.vm_action(action='info')
-        self.assertEqual(self.vm_info.result['status'], 'pause')
+        self.assertEqual(self.vm_info.result['status'], 'paused')
 
         print(colored(' [*] Resume the vm, its state should be ok', 'white'))
         self.vmservice.schedule_action('install').wait(die=True)
@@ -208,7 +217,7 @@ class VMTestCases(BaseTest):
         self.assertEqual(self.vm_info.result['status'], 'running')
 
     def test007_reboot_vm(self):
-        """ DM-007
+        """ DM-006
          *pause the vm*
 
          **Test Scenario:**
@@ -220,7 +229,7 @@ class VMTestCases(BaseTest):
         """
 
     def test008_disable_enable_vnc(self):
-        """ DM-008
+        """ DM-007
          *Disable vnc port*
 
          **Test Scenario:**
@@ -231,7 +240,7 @@ class VMTestCases(BaseTest):
         """
 
     def test009_reinstall_vm_with_many_disks(self):
-        """ DM-009
+        """ DM-008
 
          *Install a vm with many disks*
 
