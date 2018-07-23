@@ -96,7 +96,7 @@ class S3(TemplateBase):
                 best_node = self._nodes[final_index]
                 robot = self._get_zrobot(best_node['node_id'], best_node['robot_address'])
                 data = {
-                    'disktype': self.data['storageType'],
+                    'diskType': self.data['storageType'],
                     'mode': 'direct',
                     'password': password,
                     'public': False,
@@ -160,7 +160,7 @@ class S3(TemplateBase):
                 'ztClient': self.data['vmZerotier']['ztClient'],
             },
             'disks': [{
-                'diskType': 'hdd',
+                'diskType': self.data['storageType'],
                 'size': 5,
                 'mountPoint': '/mnt',
                 'filesystem': 'btrfs',
