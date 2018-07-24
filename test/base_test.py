@@ -37,7 +37,6 @@ class BaseTest(unittest.TestCase):
         self.delete_zerotier_nw()
 
     def setUp(self):
-        print('\n')
         self.ssh = BaseTest.ssh
         self.zt_network = BaseTest.zerotier_nw
         self.node_client = BaseTest.node_client

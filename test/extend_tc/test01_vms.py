@@ -13,7 +13,7 @@ class VMTestCasesExtend(BaseTest):
     def tearDown(self):
         print(colored(' [*] Remove the VM ', 'white'))
         self.vmservice.schedule_action('uninstall').wait(die=True)
-        print(colored(' [*] len(node_client.kvm.list()) = {}'.format(len(self.node_client.kvm.list())), 'white'))
+        print(colored(' [*] No. of VMs : = {}'.format(len(self.node_client.kvm.list())), 'white'))
 
     def vm_action(self, action, data={}):
         if action == 'install':
@@ -114,7 +114,7 @@ class VMTestCasesExtend(BaseTest):
                            (8192, 20, 'ext2', 'hdd', 4), (8192, 20, 'ext2', 'hdd', 8), (8192, 20, 'ext2', 'ssd', 1),
                            (8192, 20, 'ext2', 'ssd', 2), (8192, 20, 'ext2', 'ssd', 4), (8192, 20, 'ext2', 'ssd', 8)]
                           )
-    def test002_create_vm_with_disk(self, memory, disk_size, disk_fs, disk_type, cpu):
+    def test001_create_vm_with_disk(self, memory, disk_size, disk_fs, disk_type, cpu):
         print(colored(
             ' [*] Create an ubuntu machine with: {} {} {} {} {}'.format(memory, disk_size, disk_fs, disk_type, cpu),
             'white'))
@@ -145,3 +145,17 @@ class VMTestCasesExtend(BaseTest):
         self.assertEqual(cpu, self.kvm['params']['cpu'])
         self.assertEqual(len(data['disks']), len(self.kvm['params']['media']))
         self.assertIn(str(disk_size + 'G'), self.kvm['params']['media'][0]['url'])
+
+    def test002_create_vm_with_all_resources(self):
+        """ DM-002 create vm with all resources
+
+        - Create a VM with all available resources, it should works fine
+        """
+
+    def test003_create_vm_with_no_resources(self):
+        """ DM-002 create vm with no resources
+
+        - Create a VM with all available resources, it should works fine
+        - Shutdown this vm, should success
+        - Try to deploy a vm, should fail
+        """

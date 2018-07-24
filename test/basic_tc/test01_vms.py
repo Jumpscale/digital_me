@@ -32,6 +32,8 @@ class VMTestCases(BaseTest):
             return info
         elif action == 'pause':
             self.vmservice.schedule_action('pause').wait(die=True)
+        elif action == 'resume':
+            self.vmservice.schedule_action('resume').wait(die=True)
 
     def generate_random_vm_params(self):
         vm_parms = {'cpu': random.randint(1, BaseTest.node_info['core']),
@@ -203,12 +205,13 @@ class VMTestCases(BaseTest):
          #. resume the vm, its state should be ok
          """
         self.install_vm(operating_system)
+        print(colored(' [*] pause the vm, its state should be paused', 'white'))
         self.vm_action(action='pause')
         self.vm_info = self.vm_action(action='info')
         self.assertEqual(self.vm_info.result['status'], 'paused')
 
         print(colored(' [*] Resume the vm, its state should be ok', 'white'))
-        self.vmservice.schedule_action('resume').wait(die=True)
+        self.vm_action(action='resume')
         self.vm_info = self.vm_action(action='info')
         self.assertEqual(self.vm_info.result['status'], 'running')
 
@@ -237,7 +240,6 @@ class VMTestCases(BaseTest):
         result, error = self.ssh_vm_execute_command(cmd='ls /mnt')
         self.assertEqual(len(result), 1)
 
-
     def test008_reinstall_vm_with_many_disks(self):
         """ DM-008
 
@@ -249,3 +251,16 @@ class VMTestCases(BaseTest):
          #. Uninstall it
          #. Install it again
         """
+
+    def test009_uninstall_paused_vm(self):
+        """ DM-009
+
+         *uninstall a pused vm*
+
+         **Test Scenario:**
+
+         #. Install a vm, assert its working well
+         #. Pause it, should success
+         #. Uninstall it, should success
+        """
+
