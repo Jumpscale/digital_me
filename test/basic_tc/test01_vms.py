@@ -88,6 +88,17 @@ class VMTestCases(BaseTest):
         self.assertEqual(self.kvm_before+1, self.kvm_after)
         print(colored(' [*] Done!', 'green'))
 
+    def create_file(self, path):
+        for _ in range(10):
+            res, err = self.ssh_vm_execute_command(cmd='touch {}/text.txt'.format(path))
+            if err:
+                time.sleep(30)
+            else:
+                return res
+        else:
+            res, err = self.ssh_vm_execute_command(cmd='touch {}/text.txt'.format(path))
+            raise ValueError(colored(' [*] ERROR : {}'.format(err), 'red'))
+
     @parameterized.expand(['ubuntu', 'zero-os'])
     def test001_create_vm(self, operating_system):
         """ DM-001 Install a vm test case
@@ -230,9 +241,9 @@ class VMTestCases(BaseTest):
         """
         self.install_vm(operating_system='ubuntu')
 
-        print(colored(' [*] Create a file in the mounted disk'), 'white')
+        print(colored(' [*] Create a file in the mounted disk', 'white'))
         time.sleep(60)
-        res, err = self.ssh_vm_execute_command(cmd='touch /mnt/text.txt')
+        self.create_file(path='/mnt')
 
         print(colored(' [*] Reboot the vm, should succeed', 'white'))
         self.vmservice.schedule_action('reboot').wait(die=True)

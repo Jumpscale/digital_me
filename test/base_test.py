@@ -16,15 +16,17 @@ class BaseTest(unittest.TestCase):
         self.nodeIP = config['main']['nodeip']
         self.zt_token = config['main']['ztoken']
         self.robot = j.clients.zrobot.robots['main']
-        self.zt_client_instance = "myZTClient"
 
     @classmethod
     def setUpClass(cls):
         self = cls()
+        BaseTest.zt_client_instance = self.generate_random_txt()
+        BaseTest.ssh = self.load_ssh_key()
+
         self.create_zerotier_nw()
         self.host_join_zt()
         self.create_ztClient_service()
-        BaseTest.ssh = self.load_ssh_key()
+
         BaseTest.node_client = j.clients.zos.get('host', data={'host': config['main']['nodeip']})
         BaseTest.node_sal_client = j.clients.zos.sal.get_node('host')
         self.get_zos_info()
@@ -36,6 +38,7 @@ class BaseTest(unittest.TestCase):
         self.zt_client = BaseTest.zerotier_cl
         self.host_leave_zt()
         self.delete_zerotier_nw()
+        self.delete_ztCleient_service()
 
     def setUp(self):
         self.ssh = BaseTest.ssh
@@ -65,12 +68,13 @@ class BaseTest(unittest.TestCase):
         print(colored(' [*] Host join zt network', 'white'))
         j.tools.prefab.local.network.zerotier.network_join(network_id=self.zt_network.id)
         zt_machine_addr = j.tools.prefab.local.network.zerotier.get_zerotier_machine_address()
+        time.sleep(30)
         for _ in range(20):
             try:
                 host_member = self.zt_network.member_get(address=zt_machine_addr)
                 break
             except:
-                time.sleep(10)
+                time.sleep(30)
         else:
             host_member = self.zt_network.member_get(address=zt_machine_addr)
         host_member.authorize()
@@ -83,14 +87,16 @@ class BaseTest(unittest.TestCase):
         j.tools.prefab.local.network.zerotier.network_leave(self.zt_network.id)
 
     def create_ztClient_service(self):
-        try:
-            self.robot.services.get(name=self.zt_client_instance)
-        except ServiceNotFoundError:
-            data = {
-                'token': self.zt_token,
-            }
-            self.robot.services.create('github.com/zero-os/0-templates/zerotier_client/0.0.1', self.zt_client_instance,
-                                       data)
+        data = {
+            'token': self.zt_token,
+        }
+        self.robot.services.create('github.com/zero-os/0-templates/zerotier_client/0.0.1', self.zt_client_instance,
+                                   data)
+
+    def delete_ztClient_service(self):
+        zt = self.robot.services.get(name=self.zt_client_instance)
+        zt.schedule_action('delete')
+        zt.delete()
 
     def execute_command(self, ip, cmd):
         target = """ssh -o "StrictHostKeyChecking no" root@%s '%s'""" % (ip, cmd)
