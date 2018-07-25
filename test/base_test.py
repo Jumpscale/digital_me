@@ -2,6 +2,7 @@ from testconfig import config
 from termcolor import colored
 import unittest
 from js9 import j
+from zerorobot.service_collection import ServiceNotFoundError
 import uuid, time
 import subprocess
 
@@ -82,11 +83,14 @@ class BaseTest(unittest.TestCase):
         j.tools.prefab.local.network.zerotier.network_leave(self.zt_network.id)
 
     def create_ztClient_service(self):
-        data = {
-            'token': self.zt_token,
-        }
-        self.robot.services.create('github.com/zero-os/0-templates/zerotier_client/0.0.1', self.zt_client_instance,
-                                   data)
+        try:
+            self.robot.services.get(name=self.zt_client_instance)
+        except ServiceNotFoundError:
+            data = {
+                'token': self.zt_token,
+            }
+            self.robot.services.create('github.com/zero-os/0-templates/zerotier_client/0.0.1', self.zt_client_instance,
+                                       data)
 
     def execute_command(self, ip, cmd):
         target = """ssh -o "StrictHostKeyChecking no" root@%s '%s'""" % (ip, cmd)

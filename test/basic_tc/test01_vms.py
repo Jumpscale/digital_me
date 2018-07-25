@@ -2,6 +2,7 @@ from test.base_test import BaseTest
 from parameterized import parameterized
 import random, uuid, time, traceback, logging
 from termcolor import colored
+from unittest import skip
 
 
 class VMTestCases(BaseTest):
@@ -63,7 +64,7 @@ class VMTestCases(BaseTest):
             ' [*] Create an ubuntu machine with: {} {} {} {} {}'.format(self.vm_parms['memory'], self.vm_parms['cpu'],
                                                                         self.vm_parms['filesystem'], self.vm_parms['diskType'],
                                                                         self.vm_parms['size']), 'white'))
-        data = {
+        self.data = {
             'nodeId': self.nodeId,
             'disks': [{
                 'diskType': self.vm_parms['diskType'],
@@ -82,7 +83,7 @@ class VMTestCases(BaseTest):
         }
         print(colored(' [*] Install a vm, assert its working well', 'white'))
         self.kvm_before = len(self.node_client.kvm.list())
-        self.vm_action(action='install', data=data)
+        self.vm_action(action='install', data=self.data)
         self.kvm_after = len(self.node_client.kvm.list())
         self.assertEqual(self.kvm_before+1, self.kvm_after)
         print(colored(' [*] Done!', 'green'))
@@ -194,6 +195,7 @@ class VMTestCases(BaseTest):
         self.assertEqual(len(result), 2)
 
     @parameterized.expand(['ubuntu', 'zero-os'])
+    @skip(' [BUG] https://github.com/Jumpscale/digital_me/issues/39')
     def test006_pause_resume_vm(self, operating_system):
         """ DM-005 pause the vm
 
