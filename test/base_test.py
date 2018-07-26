@@ -120,8 +120,16 @@ class BaseTest(unittest.TestCase):
         return vmservice.schedule_action('info').wait(die=True)
 
     def get_vm_zt_ip(self, vmservice):
-        info = self.get_vm_info(vmservice)
-        return info.result['zerotier']['ip']
+        for _ in range(10):
+            info = self.get_vm_info(vmservice)
+            ip = info.result['zerotier']['ip']
+            if ip:
+               return ip
+            else:
+                print(colored(" [*] VM is trying to get zt IP ... ", 'yellow'))
+                time.sleep(15)
+        else:
+            raise RuntimeError(colored(" [*] VM doesn't have zt IP.", 'yellow'))
 
     def get_kvm_by_vnc(self, vnc_port):
         kvms = self.node_client.kvm.list()
