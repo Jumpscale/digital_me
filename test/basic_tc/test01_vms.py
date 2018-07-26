@@ -241,7 +241,7 @@ class VMTestCases(BaseTest):
 
         print(colored(' [*] Create a file in the mounted disk', 'white'))
         time.sleep(60)
-        res = self.ssh_vm_execute_command(cmd='touch {}/text.txt')
+        res = self.ssh_vm_execute_command(cmd='touch /mnt/text.txt')
 
         print(colored(' [*] Reboot the vm, should succeed', 'white'))
         time.sleep(60)

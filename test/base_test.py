@@ -124,7 +124,8 @@ class BaseTest(unittest.TestCase):
             info = self.get_vm_info(vmservice)
             ip = info.result['zerotier']['ip']
             if ip:
-               return ip
+                print(colored(' [*] VM IP : {}'.format(ip), 'green'))
+                return ip
             else:
                 print(colored(" [*] VM is trying to get zt IP ... ", 'yellow'))
                 time.sleep(15)
