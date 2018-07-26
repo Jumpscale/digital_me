@@ -146,6 +146,56 @@ class VMTestCasesExtend(BaseTest):
         self.assertEqual(len(data['disks']), len(self.kvm['params']['media']))
         self.assertIn(str(disk_size + 'G'), self.kvm['params']['media'][0]['url'])
 
+    @parameterized.expand(['ubuntu', 'zero-os'])
+    def test008_reinstall_vm_with_many_disks(self, operating_system):
+        """ DM-008
+
+         *Install a vm with many disks*
+
+         **Test Scenario:**
+
+         #. Install a vm with many disks, assert its working well
+         #. Uninstall it
+         #. Install it again
+        """
+        self.vm_parms = self.generate_random_vm_params()
+        print(colored(
+            ' [*] Create an ubuntu machine with: {} {} {} {} {}'.format(self.vm_parms['memory'], self.vm_parms['cpu'],
+                                                                        self.vm_parms['filesystem'],
+                                                                        self.vm_parms['diskType'],
+                                                                        self.vm_parms['size']), 'white'))
+        self.data = {
+            'nodeId': self.nodeId,
+            'disks': [{
+                'diskType': self.vm_parms['diskType'],
+                'size': self.vm_parms['size'] / 2,
+                'mountPoint': '/mnt',
+                'filesystem': self.vm_parms['filesystem'],
+                'label': str(uuid.uuid4()).replace('-', '')[:10],
+            },
+                {
+                    'diskType': self.vm_parms['diskType'],
+                    'size': self.vm_parms['size'] / 2,
+                    'mountPoint': '/mnt',
+                    'filesystem': self.vm_parms['filesystem'],
+                    'label': str(uuid.uuid4()).replace('-', '')[:10],
+                }
+            ],
+            'image': operating_system,
+            'cpu': self.vm_parms['cpu'],
+            'memory': self.vm_parms['memory'],
+            'zerotier': {'id': self.zt_network.id, 'ztClient': self.zt_client_instance},
+            'configs': [{'path': '/root/.ssh/authorized_keys',
+                         'content': self.ssh,
+                         'name': 'sshkey'}]
+        }
+        print(colored(' [*] Install a vm, assert its working well', 'white'))
+        self.kvm_before = len(self.node_client.kvm.list())
+        self.vm_action(action='install', data=self.data)
+        self.kvm_after = len(self.node_client.kvm.list())
+        self.assertEqual(self.kvm_before + 1, self.kvm_after)
+        print(colored(' [*] Done!', 'green'))
+
     def test002_create_vm_with_all_resources(self):
         """ DM-002 create vm with all resources
 

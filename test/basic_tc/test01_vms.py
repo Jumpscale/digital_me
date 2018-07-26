@@ -38,7 +38,7 @@ class VMTestCases(BaseTest):
 
     def generate_random_vm_params(self):
         vm_parms = {'cpu': random.randint(1, BaseTest.node_info['core']),
-                    'memory': random.randint(1, BaseTest.node_info['memory']),
+                    'memory': random.randint(1, BaseTest.node_info['memory']) * 1024,
                     'filesystem': random.choice(['ext4', 'ext3', 'ext2', 'btrfs'])
                     }
         if (BaseTest.node_info['hdd'] != 0) and (BaseTest.node_info['ssd'] != 0):
@@ -56,13 +56,22 @@ class VMTestCases(BaseTest):
 
     def ssh_vm_execute_command(self, cmd):
         self.vm_ip = self.get_vm_zt_ip(vmservice=self.vmservice)
-        return self.execute_command(ip=self.vm_ip, cmd=cmd)
+        for _ in range(10):
+            result, error = self.execute_command(ip=self.vm_ip, cmd=cmd)
+            if error:
+                print(colored(' [-] {}'.format(error), 'red'))
+                time.sleep(30)
+            else:
+                return result
+        else:
+            raise RuntimeError(colored(' [-] {}'.format(error), 'red'))
 
     def install_vm(self, operating_system):
         self.vm_parms = self.generate_random_vm_params()
         print(colored(
             ' [*] Create an ubuntu machine with: {} {} {} {} {}'.format(self.vm_parms['memory'], self.vm_parms['cpu'],
-                                                                        self.vm_parms['filesystem'], self.vm_parms['diskType'],
+                                                                        self.vm_parms['filesystem'],
+                                                                        self.vm_parms['diskType'],
                                                                         self.vm_parms['size']), 'white'))
         self.data = {
             'nodeId': self.nodeId,
@@ -85,19 +94,8 @@ class VMTestCases(BaseTest):
         self.kvm_before = len(self.node_client.kvm.list())
         self.vm_action(action='install', data=self.data)
         self.kvm_after = len(self.node_client.kvm.list())
-        self.assertEqual(self.kvm_before+1, self.kvm_after)
+        self.assertEqual(self.kvm_before + 1, self.kvm_after)
         print(colored(' [*] Done!', 'green'))
-
-    def create_file(self, path):
-        for _ in range(10):
-            res, err = self.ssh_vm_execute_command(cmd='touch {}/text.txt'.format(path))
-            if err:
-                time.sleep(30)
-            else:
-                return res
-        else:
-            res, err = self.ssh_vm_execute_command(cmd='touch {}/text.txt'.format(path))
-            raise ValueError(colored(' [*] ERROR : {}'.format(err), 'red'))
 
     @parameterized.expand(['ubuntu', 'zero-os'])
     def test001_create_vm(self, operating_system):
@@ -138,7 +136,7 @@ class VMTestCases(BaseTest):
 
         print(colored(' [*] Create a file in the mounted disk'), 'white')
         time.sleep(60)
-        res, err = self.ssh_vm_execute_command(cmd='touch /mnt/text.txt')
+        res = self.ssh_vm_execute_command(cmd='touch /mnt/text.txt')
 
         print(colored(' [*] Uninstall a vm, assert its working well', 'white'))
         self.vm_action(action='uninstall')
@@ -202,7 +200,7 @@ class VMTestCases(BaseTest):
         self.vmservice.schedule_action('install').wait(die=True)
 
         print(colored(" [*] Assert the created file is still existing", 'white'))
-        result, error = self.ssh_vm_execute_command(cmd='ls /mnt')
+        result = self.ssh_vm_execute_command(cmd='ls /mnt')
         self.assertEqual(len(result), 2)
 
     @parameterized.expand(['ubuntu', 'zero-os'])
@@ -243,30 +241,20 @@ class VMTestCases(BaseTest):
 
         print(colored(' [*] Create a file in the mounted disk', 'white'))
         time.sleep(60)
-        self.create_file(path='/mnt')
+        res = self.ssh_vm_execute_command(cmd='touch {}/text.txt')
 
         print(colored(' [*] Reboot the vm, should succeed', 'white'))
+        time.sleep(60)
         self.vmservice.schedule_action('reboot').wait(die=True)
         print(colored(' [*] Done!', 'green'))
 
         print(colored(" [*] Assert the created file is there", 'white'))
-        result, error = self.ssh_vm_execute_command(cmd='ls /mnt')
+        result = self.ssh_vm_execute_command(cmd='ls /mnt')
         self.assertEqual(len(result), 1)
 
-    def test008_reinstall_vm_with_many_disks(self):
+    @skip(' [BUG] https://github.com/Jumpscale/digital_me/issues/39')
+    def test008_uninstall_paused_vm(self):
         """ DM-008
-
-         *Install a vm with many disks*
-
-         **Test Scenario:**
-
-         #. Install a vm with many disks, assert its working well
-         #. Uninstall it
-         #. Install it again
-        """
-
-    def test009_uninstall_paused_vm(self):
-        """ DM-009
 
          *uninstall a pused vm*
 
@@ -276,4 +264,3 @@ class VMTestCases(BaseTest):
          #. Pause it, should success
          #. Uninstall it, should success
         """
-

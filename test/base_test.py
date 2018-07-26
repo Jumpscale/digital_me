@@ -2,20 +2,19 @@ from testconfig import config
 from termcolor import colored
 import unittest
 from js9 import j
-from zerorobot.service_collection import ServiceNotFoundError
 import uuid, time
 import subprocess
 
 
 class BaseTest(unittest.TestCase):
     node_info = {'ssd': 0, 'hdd': 0, 'core': 0, 'memory': 0}
+    robot = j.clients.zrobot.robots['main']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.nodeId = config['main']['nodeid']
         self.nodeIP = config['main']['nodeip']
         self.zt_token = config['main']['ztoken']
-        self.robot = j.clients.zrobot.robots['main']
 
     @classmethod
     def setUpClass(cls):
@@ -38,7 +37,7 @@ class BaseTest(unittest.TestCase):
         self.zt_client = BaseTest.zerotier_cl
         self.host_leave_zt()
         self.delete_zerotier_nw()
-        self.delete_ztCleient_service()
+        self.delete_ztClient_service()
 
     def setUp(self):
         self.ssh = BaseTest.ssh
