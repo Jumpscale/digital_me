@@ -59,9 +59,10 @@ class VMTestCases(BaseTest):
         for _ in range(10):
             result, error = self.execute_command(ip=self.vm_ip, cmd=cmd)
             if error:
-                print(colored(' [-] {}'.format(error), 'red'))
+                print(colored(' [-] Execute command error : {}'.format(error), 'red'))
                 time.sleep(30)
             else:
+                print(colored(' [+] Execute command passed.', 'green'))
                 return result
         else:
             raise RuntimeError(colored(' [-] {}'.format(error), 'red'))
@@ -121,7 +122,7 @@ class VMTestCases(BaseTest):
         self.kvm = self.get_kvm_by_vnc(vnc_port=self.vm_info.result['vnc'])
         self.assertIn(operating_system, self.kvm['params']['flist'])
 
-    def test003_reinstall_vm(self):
+    def test002_reinstall_vm(self):
         """ DM-002 Re-install a vm test case
 
         **Test Scenario:**
@@ -151,11 +152,11 @@ class VMTestCases(BaseTest):
         print(colored(' [*] Done!', 'green'))
 
         print(colored(" [*] Assert the created file isn't there", 'white'))
-        result, error = self.ssh_vm_execute_command(cmd='ls /mnt')
+        result = self.ssh_vm_execute_command(cmd='ls /mnt')
         self.assertEqual(len(result), 0)
 
     @parameterized.expand(['ubuntu', 'zero-os'])
-    def test004_delete_vm(self, operating_system):
+    def test003_delete_vm(self, operating_system):
         """ DM-003 Delete the vm
 
         **Test Scenario:**
@@ -172,7 +173,7 @@ class VMTestCases(BaseTest):
         print(colored(' [*] Done!', 'green'))
 
     @parameterized.expand(['ubuntu', 'zero-os'])
-    def test005_shutdown_vm(self, operating_system):
+    def test004_shutdown_vm(self, operating_system):
         """ DM-004 Shutdown the vm
 
          **Test Scenario:**
@@ -186,11 +187,12 @@ class VMTestCases(BaseTest):
          """
         self.install_vm(operating_system=operating_system)
 
-        print(colored(' [*] Create a file in the mounted disk'), 'white')
+        print(colored(' [*] Create a file in the mounted disk', 'white'))
         self.ssh_vm_execute_command(cmd='touch /mnt/text.txt')
 
         print(colored(' [*] Shutdown the vm, assert it was deleted', 'white'))
         self.vm_action(action='shutdown')
+        time.sleep(60)
 
         print(colored(' [*] Get machine status, It should be halted', 'white'))
         self.vm_info = self.vm_action(action='info')
@@ -201,11 +203,11 @@ class VMTestCases(BaseTest):
 
         print(colored(" [*] Assert the created file is still existing", 'white'))
         result = self.ssh_vm_execute_command(cmd='ls /mnt')
-        self.assertEqual(len(result), 2)
+        self.assertEqual(len(result), 1)
 
     @parameterized.expand(['ubuntu', 'zero-os'])
     @skip(' [BUG] https://github.com/Jumpscale/digital_me/issues/39')
-    def test006_pause_resume_vm(self, operating_system):
+    def test005_pause_resume_vm(self, operating_system):
         """ DM-005 pause the vm
 
          **Test Scenario:**
@@ -226,7 +228,8 @@ class VMTestCases(BaseTest):
         self.vm_info = self.vm_action(action='info')
         self.assertEqual(self.vm_info.result['status'], 'running')
 
-    def test007_reboot_vm(self):
+    @parameterized.expand(['ubuntu', 'zero-os'])
+    def test006_reboot_vm(self, operating_system):
         """ DM-006
          *pause the vm*
 
@@ -237,7 +240,7 @@ class VMTestCases(BaseTest):
          #, Reboot the vm, should succeed
          #. Check the created file, should be there
         """
-        self.install_vm(operating_system='ubuntu')
+        self.install_vm(operating_system=operating_system)
 
         print(colored(' [*] Create a file in the mounted disk', 'white'))
         time.sleep(60)
@@ -253,8 +256,9 @@ class VMTestCases(BaseTest):
         self.assertEqual(len(result), 1)
 
     @skip(' [BUG] https://github.com/Jumpscale/digital_me/issues/39')
-    def test008_uninstall_paused_vm(self):
-        """ DM-008
+    @parameterized.expand(['ubuntu', 'zero-os'])
+    def test007_shutdown_paused_vm(self, operating_system):
+        """ DM-007
 
          *uninstall a pused vm*
 
@@ -262,5 +266,25 @@ class VMTestCases(BaseTest):
 
          #. Install a vm, assert its working well
          #. Pause it, should success
-         #. Uninstall it, should success
+         #. Shutdown the vm, assert it was deleted
+         #. Get machine status, It should be halted
+         #. Install it again, It should be paused
         """
+        self.install_vm(operating_system=operating_system)
+        print(colored(' [*] pause the vm, its state should be paused', 'white'))
+        self.vm_action(action='pause')
+        self.vm_info = self.vm_action(action='info')
+        self.assertEqual(self.vm_info.result['status'], 'paused')
+
+        print(colored(' [*] Shutdown the vm, assert it was deleted', 'white'))
+        self.vm_action(action='shutdown')
+
+        print(colored(' [*] Get machine status, It should be halted', 'white'))
+        self.vm_info = self.vm_action(action='info')
+        self.assertEqual(self.vm_info.result['status'], 'halted')
+
+        print(colored(' [*] Install it again, It should be paused', 'white'))
+        self.vmservice.schedule_action('install').wait(die=True)
+        self.vm_info = self.vm_action(action='info')
+        self.assertEqual(self.vm_info.result['status'], 'paused')
+
