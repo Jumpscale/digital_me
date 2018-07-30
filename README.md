@@ -1,3 +1,6 @@
+# Moved to https://github.com/threefoldtech/0-templates/tree/master/digital_me
+
+
 # Digital Me Templates
 
 [![Build Status](https://travis-ci.com/Jumpscale/digital_me.svg?branch=master)](https://travis-ci.com/Jumpscale/digital_me)
